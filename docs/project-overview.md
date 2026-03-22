@@ -63,6 +63,7 @@ SmartSort-Warehouse/
 ├── README.md                   ← 프로젝트 소개
 ├── docs/                       ← 문서
 │   ├── project-overview.md     ← 프로젝트 전체 기획·설계 문서
+│   ├── team-roles.md           ← 팀 구성 및 업무 분장
 │   └── (draw.io, svg 파일 등)
 ├── unity/                      ← Unity 디지털 트윈
 │   ├── .gitignore              ← Unity 전용 (Library/, Temp/ 등)
