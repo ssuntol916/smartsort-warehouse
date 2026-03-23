@@ -42,7 +42,16 @@ public class Line
      */
     public bool IsCoincident(Line other)
     {
+        // 1. 두 선의 방향 외적과 위치 외적을 계산
+        //    → GetCrossVectors() 로 외적 계산하기
+        GetCrossVectors(other, out Vector3 crossDirection, out Vector3 crossPosition);
 
+        // 2. 반환 조건
+        //    crossDirection < Tolerance → 방향이 평행 or 일치
+        //    crossPosition < Tolerance → 위치가 동일 (일치만 true)
+        //    ex) 두 선이 완전히 겹치는 일치선 → true
+        //        평행선 및 그 이외 → false
+        return crossDirection.magnitude < Tolerance && crossPosition.magnitude < Tolerance;
     }
 
     /**
@@ -53,10 +62,30 @@ public class Line
      */
     public bool IsParallel(Line other)
     {
+        // 1. 두 선의 방향 외적과 위치 외적을 계산
+        //    → GetCrossVectors() 로 외적 계산하기
+        GetCrossVectors(other, out Vector3 crossDirection, out Vector3 crossPosition);
+
+        // 2. 반환 조건
+        //    crossDirection < Tolerance → 방향이 평행 or 일치
+        //    crossPosition > Tolerance → 위치가 달라 일치가 아님 (평행만 true)
+        //    ex) 두 선이 y축 방향으로 1칸 떨어진 평행선 → true
+        //        일치선 및 그 이외 → false
+        return crossDirection.magnitude < Tolerance && crossPosition.magnitude > Tolerance;
+    }
+
+    /**
+     * @brief  두 선의 방향 외적과 위치 외적을 계산한다.
+     * @param  other        비교할 대상 Line
+     * @param  crossDir     방향벡터 외적 결과 (out)
+     * @param  crossPos     위치벡터 외적 결과 (out)
+     */
+    private void GetCrossVectors(Line other, out Vector3 crossDirection, out Vector3 crossPosition)
+    {
         // 1. 두 선의 방향벡터 외적 계산
         //    외적이 0이면 → 두 선의 방향이 평행 or 일치
         //    외적이 0이 아니면 → 두 선이 교차 or 꼬인 관계
-        Vector3 crossDirection = Vector3.Cross(Direction, other.Direction);
+        crossDirection = Vector3.Cross(Direction, other.Direction);
 
         // 2. 이 선의 시작점 → other 선의 시작점 방향벡터
         //    필요한 이유 → 방향만 같아도 평행 or 일치 둘 다 해당되기 때문에
@@ -67,14 +96,7 @@ public class Line
         // 3. 방향벡터와 dir 의 외적 계산
         //    크기 = 0 이면 → 두 선이 같은 선상 (일치)
         //    크기 > 0 이면 → 두 선이 다른 위치에 있음 (평행)
-        Vector3 crossPosition = Vector3.Cross(Direction, dirToOther);
-
-        // 4. 반환 조건
-        //    crossDirection < Tolerance → 방향이 평행 (평행 or 일치)
-        //    crossPosition > Tolerance → 위치가 달라 일치가 아님 (평행만 true)
-        //    ex) 두 선이 y축 방향으로 1칸 떨어진 평행선 → true
-        //        두 선이 완전히 겹치는 일치선 → false
-        return crossDirection.magnitude < Tolerance && crossPosition.magnitude > Tolerance;
+        crossPosition = Vector3.Cross(Direction, dirToOther);
     }
 
     /**
@@ -85,7 +107,19 @@ public class Line
      */
     public bool IsPerpendicular(Line other)
     {
+        // 1. 두 선의 방향벡터 내적 계산
+        //    Dot(A, B) = |A| × |B| × cos(θ)
+        //    수직 판별은 각도만 중요하므로 거리값이 필요없음 → Direction(normalized) 사용
+        //    두 방향벡터가 normalized(길이=1) 이므로 → Dot = cos(θ)
+        //    수직이면 cos(90°) = 0 → Dot = 0
+        //    즉 Dot 결과가 0에 가까우면 두 선이 수직
+        float dot = Vector3.Dot(Direction, other.Direction);
 
+        // 2. 반환 조건
+        //    Mathf.Abs 를 쓰는 이유: Dot 결과가 음수가 나올 수 있어서 절대값으로 변환
+        //    ex) Direction=(1,0,0), other.Direction=(0,1,0) → Dot=0 → 수직 ✅
+        //        Direction=(1,0,0), other.Direction=(1,0,0) → Dot=1 → 수직 아님 ❌
+        return Mathf.Abs(dot) < Tolerance;
     }
 
     /**
@@ -96,6 +130,10 @@ public class Line
      */
     public Vector3? Intersect(Line other)
     {
+        // 1. 두 선이 평행하거나 일치하면 → null 반환
+        if (IsParallel(other) || IsCoincident(other))
+            return null;
+
 
     }
 
@@ -139,8 +177,12 @@ public class Line
 
         // 3. AP벡터를 선 방향(dirAB)으로 투영한 거리 t 구하기
         //    Dot(AP, D) = |AP| × |D| × cos(θ)
-        //    dirAB는 normalized(길이=1) 이므로 → |D| = 1
-        //    결국 Dot(AP, D) = |AP| × cos(θ) = t
+        //    D - dirAB는 normalized(길이=1) 해야 하는 이유:
+        //    → |D| = 1 이 되어야 공식에서 제거되고 t = |AP| × cos(θ) = 실제 거리값이 나옴
+        //    → normalized 안 하면 |D| 값이 t 에 곱해져서 실제 거리가 아닌 뻥튀기된 값이 나옴
+        //    ex) dirAB=(4,0,0) normalized 안함 → t = 12 → Q=(48,0,0) 엉뚱한 곳 ❌
+        //    ex) dirAB=(1,0,0) normalized 함  → t = 3  → Q=(3,0,0)  정확한 곳 ✅
+        //    AP - vectorAP는 normalized 하지 않음 → |AP| 거리값이 살아있어야 t가 실제 거리로 나옴
         //    즉 Dot이 cos(θ) 계산을 내부에서 자동으로 처리해준다
         //    → AP 벡터 중에서 선 방향 성분만 꺼낸 값 = A에서 수직점까지의 거리
         //    ex) vectorAP=(3,5,0), dirAB=(1,0,0) → Dot = 3 (y성분 5는 버려지고 x성분 3만 남음 = A→Q 거리)
