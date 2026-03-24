@@ -1,8 +1,8 @@
 // ============================================================
 // 파일명  : Line.cs
 // 역할    : 기구학 계산을 위한 선(Line) 기반 클래스
-// 작성자  : 
-// 작성일  : 
+// 작성자  : 이현화
+// 작성일  : 2026-03-24
 // 수정이력: 
 // ============================================================
 
@@ -131,9 +131,44 @@ public class Line
     public Vector3? Intersect(Line other)
     {
         // 1. 두 선이 평행하거나 일치하면 → null 반환
+        //    평행/일치면 만나는 점이 없거나 무한히 많아서 교점 정의 불가
         if (IsParallel(other) || IsCoincident(other))
             return null;
 
+        // 2. 두 시작점 사이 벡터 (B - A)
+        //    "끝점 - 시작점" 규칙 : A(이 선의 시작점) → B(상대 선의 시작점) 방향벡터
+        Vector3 startPointDiff = other.PointA - _pointA;
+
+        // 3. 두 방향벡터 외적 (u × v)
+        //    외적이 0이면 → 평행 or 일치 (1번에서 이미 걸러짐)
+        Vector3 directionCross = Vector3.Cross(Direction, other.Direction);
+
+        // 4. t 계산
+        //    공식: t = ((B-A) × v) · (u × v) / |u × v|²
+        //
+        //    기호 설명:
+        //    × → 외적(Cross)  결과: Vector3
+        //    · → 내적(Dot)    결과: float
+        //
+        //    단계별 계산:
+        //    1단계: (B-A) × v  → Vector3.Cross(startPointDiff, other.Direction)     → Vector3
+        //    2단계: (u × v)    → directionCross                                     → Vector3
+        //    3단계: 1단계 · 2단계 → Vector3.Dot(1단계, 2단계)                       → float (분자)
+        //           Vector3를 숫자(float)로 바꾸기 위해 내적 사용
+        //    4단계: / |u × v|² → / directionCross.sqrMagnitude(벡터의 크기 제곱)   → t (float)
+        float t = Vector3.Dot(Vector3.Cross(startPointDiff, other.Direction), directionCross) / directionCross.sqrMagnitude;
+
+        // 5. 교점 후보 계산
+        //    this 객체의 공식 (A + t*u) 에 t 를 대입해서 교점 후보 좌표 계산
+        //    아직 other 객체 위에 있는지 확인 안됐으므로 "후보" 임
+        Vector3 intersectPoint = _pointA + Direction * t;
+
+        // 6. 꼬인 관계 확인
+        //    꼬여있을 수 있으니 Contains 로 교점이 other 위에 있는지 확인
+        if (!other.Contains(intersectPoint))
+            return null;
+
+        return intersectPoint;
 
     }
 
@@ -147,7 +182,7 @@ public class Line
      */
     public bool Contains(Vector3 point)
     {
-        // 1. point와 투영점 사이 거리 계산
+        // 1. Distance() 로 point와 선 사이의 거리 계산
         //    점이 선 위에 있으면 거리 = 0
         float distance = Distance(point);
 
@@ -168,7 +203,6 @@ public class Line
         // 1. 선의 방향 벡터 구하기
         //    Direction 프로퍼티 = (_pointB - _pointA).normalized
         //    벡터 방향은 반드시 "끝점 - 시작점" 로 계산한다
-        //    반대로 하면 dirAB 방향이 뒤집혀서 투영점 Q가 엉뚱한 곳에 찍힘
         Vector3 dirAB = Direction;
 
         // 2. _pointA → point 로 향하는 벡터 구하기 (AP벡터)
