@@ -1,6 +1,7 @@
 # 버전 이력
 
 - v1.0 (최초 작성, 2026.03.22.)
+- v1.01 (커밋 메시지 `WIP` 타입 추가, 2026.03.24.)
 
 # 1. 프로젝트 개요
 
@@ -481,6 +482,7 @@ int deltaZ = targetZ - currentZ;
 | hw | 하드웨어/펌웨어 변경 | hw: MG90S PWM 듀티 사이클 조정 |
 | test | 테스트 코드 추가 | test: 셔틀 위치 정밀도 단위 테스트 |
 | chore | 빌드·설정 변경 | chore: PlatformIO 라이브러리 버전 업 |
+| WIP | 작업 중 (중간 백업용) | WIP: 기구학 기반 Line 클래스 작성 중(1) |
 
 ### 8.2.3 PR(Pull Request) 규칙
 
