@@ -14,14 +14,13 @@ using static BinTransfer;
 ///     <item><term>binGO</term> </item>
 /// </list>
 /// </remarks>
-public class BinTest
+public class BinTest : MonoBehaviour
 {
     private string _id;             // Bin의 고유식별자
     private CellsInt _fromCell;       // Bin 출발 셀 (X, Y, Z)
     private CellsInt _toCell;         // Bin 목적 셀 (X, Y, Z)
     private bool _isTransferring;       // 이송 중 여부
-    
-    public GameObject? binGO;    // Bin의 GameObject 참조 (디버그용)
+
 
     public string Id { get => _id; }     // Bin 고유식별자
     public CellsInt FromCell { get => _fromCell; set => _fromCell = value; }            // Bin 출발 셀
@@ -33,13 +32,6 @@ public class BinTest
     {
         _id = id;
         _fromCell = CellsInt.na;
-        _toCell = _fromCell;
-        _isTransferring = false;
-    }
-    public BinTest(string id, int initX, int initY, int initZ)
-    {
-        _id = id;
-        _fromCell = new CellsInt(initX, initY, initZ);
         _toCell = _fromCell;
         _isTransferring = false;
     }

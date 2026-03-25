@@ -2,7 +2,7 @@
 // 파일명  : BinTransfer.cs
 // 역할    : Bin 이송 알고리즘 클래스
 // 작성자  : 이건호
-// 작성일  : 
+// 작성일  : 260325
 // 수정이력: 
 // ============================================================
 
@@ -16,6 +16,9 @@ using static BinTransfer;
 /// 창고에 저장할 Bin 위주로 제어.
 /// </summary>
 /// <remarks>
+/// 사용자 타입
+/// <list type="bullet">
+///     <item><term>CellsInt</term> 창고 전용 3차원 정수 좌표</item>
 /// 구성
 /// <list type="bullet">
 ///     <item><term> gridSize </term> const int</item>
@@ -24,16 +27,26 @@ using static BinTransfer;
 /// </list>
 /// 메서드: 등록 및 해제
 /// <list type="bullet">
-///     <item><term></term> </item>
-///     <item><term></term> </item>
+///     <item><term>BinRegister(Bin클래스, int, int)</term> (X, Y, 맨 위)에 Bin 쌓아서 등록</item>
+///     <item><term>BinRegister(Bin클래스, CellsInt)</term> Z 무시 (X, Y, 맨 위)에 Bin 쌓아서 등록</item>
+///     <item><term>BinUnregister(string)</term> id 로 Bin 해제. 윗 Bin도 내린다.</item>
+///     <item><term>BinUnregister(int, int)</term> (X, Y, 맨 위) Bin 해제.</item>
+///     <item><term>BinUnregister(CellsInt)</term> (X, Y, Z) Bin 해제. 윗 Bin도 내린다.</item>
+///     <item><term>ShuttleRegister(Shuttle클래스, int, int)</term> (X, Y)에 Shuttle 등록. HomeCell좌표가 됨.</item>
+///     <item><term>ShuttleUnregister(string)</term> id 로 Shuttle 해제.</item>
+/// </list>
+/// 메서드: Warehouse 관리
+/// <list type="bullet">
+///     <item><term>TransferXY(int, int, int, int)</term> 출발 좌표 맨위 Bin을 목적 좌표 맨위로 옮김</item>
+/// </list>
+/// 메서드: Shuttle 제어
+/// <list type="bullet">
+///     <item><term>MoveShuttleToHome(Shuttle클래스)</term> 셔틀을 HomeCell 로 옮김</item>
 /// </list>
 /// 메서드: 유틸리티
 /// <list type="bullet">
-///     <item><term>FindMaxZ</term> </item>
+///     <item><term>FindMaxZ(int, int)</term> (X, Y) 의 맨 위 좌표 반환</item>
 /// </list>
-/// 네스트타입
-/// <list type="bullet">
-///     <item><term>CellsInt</term> 창고 전용 3차원 정수 좌표</item>
 /// </list>
 /// 외부타입
 /// <list type="bullet">
@@ -43,12 +56,6 @@ using static BinTransfer;
 /// </remarks>
 public class BinTransfer
 {
-    // 그리드 크기 상수 (3 × 3 × 3)
-    public const int gridSize = 3;
-    
-    List<BinTest> _binList;     // Bin 1개만 구현.
-    List<ShuttleTest> _shuttleList;    // Bin 을 옮길 셔틀. 메서드에서는 값이 존재해야한다.
-
     public struct CellsInt
     {
         public int x;
@@ -72,6 +79,19 @@ public class BinTransfer
         public static CellsInt operator *(int r, CellsInt a)
         {
             return new CellsInt(r * a.x, r * a.y, r * a.z);
+        }
+        public static bool operator ==(CellsInt a, CellsInt b)
+        {
+            foreach (int idx in new int[] { 0, 1, 2 })
+            {
+                if (a[idx] != b[idx])
+                    return false;
+            }
+            return true;
+        }
+        public static bool operator !=(CellsInt a, CellsInt b)
+        {
+            return !(a == b);
         }
         public static CellsInt zero => new CellsInt(0, 0, 0);
         public static CellsInt na => new CellsInt(-1, -1, -1);
@@ -97,6 +117,12 @@ public class BinTransfer
             return new CellsInt(vec.x, vec.z, vec.y);
         }
     }
+    // 그리드 크기 상수 (3 × 3 × 3)
+    public const int gridSize = 3;
+    
+    List<BinTest> _binList;     // Bin 1개만 구현.
+    List<ShuttleTest> _shuttleList;    // Bin 을 옮길 셔틀. 메서드에서는 값이 존재해야한다.
+
     // ============================================================
     // 등록 및 해제
     // ============================================================
@@ -219,7 +245,7 @@ public class BinTransfer
 
     // Shuttle 등록/해제
     /// <summary>
-    /// Shuttle 등록. 해당 (x, y) 셀에 배치하고, 배치된 좌표를 알린다. z는 0으로 고정.
+    /// Shuttle 등록. 해당 (x, y) 셀에 배치하고, 배치된 좌표를 알린다. z는 gridSize로 고정.
     /// </summary>
     /// <param name="shuttle">등록할 ShuttleTest 인스턴스</param>
     /// <param name="initX">초기 X 좌표</param>
@@ -233,7 +259,7 @@ public class BinTransfer
             throw new IndexOutOfRangeException($"셀 ({initX}, {initY})의 좌표가 그리드 범위를 벗어나므로 ShuttleRegister 불가");
         if (_shuttleList.Exists(s => s.Id == shuttle.Id))
             throw new InvalidOperationException($"id '{shuttle.Id}'가 중복되므로 ShuttleRegister 불가");
-        CellsInt placedCell = new CellsInt(initX, initY, 0);
+        CellsInt placedCell = new CellsInt(initX, initY, gridSize);
         if (_shuttleList.Exists(s =>
             s.FromCell.x == placedCell.x &&
             s.FromCell.y == placedCell.y))
@@ -267,7 +293,7 @@ public class BinTransfer
     }
 
     // ============================================================
-    // 창고 관리
+    // Warehouse 관리
     // ============================================================
     /// <summary>
     /// (fromX, fromY)의 가장 위쪽 Bin을 (toX, toY)의 가장 위쪽으로 이송한다.
@@ -310,7 +336,7 @@ public class BinTransfer
         bin.ToCell = toCell;
         bin.IsTransferring = true;
 
-        ShuttleTest shuttle = FindShuttle(fromCell);
+        ShuttleTest shuttle = FindNearShuttle(fromCell);
 
         // 동작: 출발지이동 → 리프팅 → 목적지이동 → 하강
         MoveShuttleToCell(shuttle, fromCell);
@@ -330,38 +356,81 @@ public class BinTransfer
     }
 
     /**
-     * @brief  사용할 수 있는 셔틀을 할당한다. (임시구현)
+     * @brief  사용할 수 있는 가까운 셔틀을 할당한다.
     */
-    private ShuttleTest FindShuttle(CellsInt cell)
+    private ShuttleTest FindNearShuttle(CellsInt cell)
     {
+        ShuttleTest nearest = null;
+        int minDist = int.MaxValue;
 
+        foreach (ShuttleTest s in _shuttleList)
+        {
+            if (s.IsTransferring)
+                continue;
+
+            int dist = Math.Abs(s.FromCell.x - cell.x) + Math.Abs(s.FromCell.y - cell.y);
+            if (dist < minDist)
+            {
+                minDist = dist;
+                nearest = s;
+            }
+        }
+
+        if (nearest == null)
+            throw new InvalidOperationException("사용 가능한 Shuttle이 없으므로 FindNearShuttle 불가");
+
+        nearest.IsTransferring = true;
+        return nearest;
     }
 
     // ============================================================
     // Shuttle 제어
     // ============================================================
+    // 좌표이동, 방향전환, 픽업, 적치
+    // ============================================================
     /// <summary>
     /// Shuttle을 해당 셀의 (x, y) 좌표로 이동시킨다. z는 무시된다.
+    /// 정밀도를 위해 기본 7회까지 반복한다.
     /// </summary>
-    /// <param name="cell"></param>
-    private void MoveShuttleToCell(ShuttleTest shuttle, CellsInt cell)
+    /// <param name="shuttle">이동시킬 ShuttleTest 인스턴스</param>
+    /// <param name="cell">목적 셀 좌표</param>
+    /// <param name="rep">재귀 깊이 (기본 7)</param>
+    /// <exception cref="InvalidOperationException">재귀 횟수 초과 시</exception>
+    private void MoveShuttleToCell(ShuttleTest shuttle, CellsInt cell, int rep = 7)
     {
-        
-    }
+        while (true)
+        {
+            if (rep <= 0)
+                throw new InvalidOperationException("MoveShuttleToCell: Shuttle이 이동에 방해를 받고 있음");
 
-    /**
-     * @brief  X·Y 바퀴 접지를 headingTo 방향으로 전환한다.
-     */
-    private void SwitchDirection(ShuttleTest shuttle, bool headingTo)
-    {
-        if (shuttle.IsHeadingY == headingTo)
-        {
-            return;
-        }
-        else
-        {
-            SwitchDirectionOrder(shuttle);
-            shuttle.IsHeadingY = !shuttle.IsHeadingY;
+            CellsInt targetXY = new CellsInt(cell.x, cell.y, shuttle.FromCell.z);
+            CellsInt path = targetXY - shuttle.FromCell;
+
+            // 이미 목적지에 도착한 경우
+            if (path == CellsInt.zero)
+                return;
+
+            CellsInt arrivedCell = new CellsInt(cell.x, cell.y, gridSize);
+            if (shuttle.IsHeadingY && path.y != 0)
+            {
+                MoveShuttleOnYDrive(shuttle, path.y);
+                MoveShuttleOnXDrive(shuttle, path.x);
+                shuttle.FromCell = arrivedCell; // 좌표 갱신. 위치센서 가 있는 경우 수정바람.
+                return;
+            }
+            else if (!shuttle.IsHeadingY && path.x != 0)
+            {
+                MoveShuttleOnXDrive(shuttle, path.x);
+                MoveShuttleOnYDrive(shuttle, path.y);
+                shuttle.FromCell = arrivedCell; // 좌표 갱신. 위치센서 가 있는 경우 수정바람.
+                return;
+            }
+            else
+            {
+                // 현재 heading 방향의 경로가 0이므로 방향 전환 후 재시도
+                SwitchDirection(shuttle);
+                rep--;
+            }
         }
     }
     /**
@@ -370,60 +439,155 @@ public class BinTransfer
     private void SwitchDirection(ShuttleTest shuttle)
     {
         shuttle.IsHeadingY = !shuttle.IsHeadingY;
-        SwitchDirectionOrder(shuttle);
-    }
-    /**
-     * @brief  X·Y 바퀴 접지 전환. 크랭크축을 회전시킴.
-     */
-    private void SwitchDirectionOrder(ShuttleTest shuttle)
-    {
-
+        SwitchDirectionDrive(shuttle);
     }
 
     /**
      * @brief  스풀/벨트를 감아올려 목적 층의 Bin을 리프팅한다.
-     * @param  layer  리프팅할 층 번호 (0 ~ gridSize - 1)
+     * @param  shuttle  리프팅을 수행할 ShuttleTest 인스턴스
      */
-    private void LiftBin(ShuttleTest shuttle)
+    private void LiftBin(ShuttleTest shuttle, int rep = 7)
     {
+        // Shuttle의 리프트가 제자리에 있는지 확인
+        if (shuttle.FromCell.z != gridSize)
+            throw new InvalidOperationException("Shuttle의 리프트가 제자리에 있지 않음");
 
+        int maxZ = FindMaxZ(shuttle.FromCell.x, shuttle.FromCell.y);
+        if (maxZ < 0 ||  maxZ >= gridSize)
+            throw new InvalidOperationException("LiftBin: Shuttle이 위치한 셀에 Bin이 존재하지 않거나, 해당 셀 데이터 오류");
+
+        // 하강: Shuttle의 z값을 maxZ로 맞춘다.
+        int descendRep = rep;
+        while (true)
+        {
+            if (descendRep <= 0)
+                throw new InvalidOperationException("LiftBin 하강에 방해를 받고 있음");
+            // 하강완료.
+            if (shuttle.FromCell.z == maxZ)
+                break;
+
+            int descendDelta = maxZ - shuttle.FromCell.z;
+            LiftDrive(shuttle, descendDelta);
+            shuttle.FromCell = new CellsInt(shuttle.FromCell.x, shuttle.FromCell.y, maxZ);
+            descendRep--;
+        }
+
+        // Bin 잡기
+        GrabDrive(shuttle);
+
+        // 상승: Shuttle의 z값을 gridSize로 맞춘다.
+        int ascendRep = rep;
+        while (true)
+        {
+            if (ascendRep <= 0)
+                throw new InvalidOperationException("LiftBin 상승에 방해를 받고 있음");
+            // 상승완료.
+            if (shuttle.FromCell.z == gridSize)
+                break;
+
+            int ascendDelta = gridSize - shuttle.FromCell.z;
+            LiftDrive(shuttle, ascendDelta);
+            shuttle.FromCell = new CellsInt(shuttle.FromCell.x, shuttle.FromCell.y, gridSize);
+            ascendRep--;
+        }
     }
-
     /**
      * @brief  스풀/벨트를 풀어 Bin을 현재 층에 내려놓는다.
+     * @param  shuttle  하강을 수행할 ShuttleTest 인스턴스
      */
-    private void LowerBin(ShuttleTest shuttle)
+    private void LowerBin(ShuttleTest shuttle, int rep = 7)
     {
+        // Shuttle의 리프트가 제자리에 있는지 확인
+        if (shuttle.FromCell.z != gridSize)
+            throw new InvalidOperationException("Shuttle의 리프트가 제자리에 있지 않음");
 
+        int maxZ = FindMaxZ(shuttle.FromCell.x, shuttle.FromCell.y);
+        int targetZ = maxZ + 1;
+        if (targetZ >= gridSize)
+            throw new InvalidOperationException("LowerBin: Shuttle이 위치한 셀에 Bin이 가득 차 있거나, 해당 셀 데이터 오류");
+
+        // 하강: Shuttle의 z값을 targetZ로 맞춘다.
+        int descendRep = rep;
+        while (true)
+        {
+            if (shuttle.FromCell.z == targetZ)
+                break;
+            if (descendRep <= 0)
+                throw new InvalidOperationException("LowerBin 하강에 방해를 받고 있음");
+
+            int descendDelta = targetZ - shuttle.FromCell.z;
+            LiftDrive(shuttle, descendDelta);
+            shuttle.FromCell = new CellsInt(shuttle.FromCell.x, shuttle.FromCell.y, targetZ); // 좌표 갱신. 위치센서 가 있는 경우 수정바람.
+            descendRep--;
+        }
+
+        // Bin 놓기
+        ReleaseDrive(shuttle);
+
+        // 상승: Shuttle의 z값을 gridSize로 맞춘다.
+        int ascendRep = rep;
+        while (true)
+        {
+            if (shuttle.FromCell.z == gridSize)
+                break;
+            if (ascendRep <= 0)
+                throw new InvalidOperationException("LowerBin 상승에 방해를 받고 있음");
+
+            int ascendDelta = gridSize - shuttle.FromCell.z;
+            LiftDrive(shuttle, ascendDelta);
+            shuttle.FromCell = new CellsInt(shuttle.FromCell.x, shuttle.FromCell.y, gridSize); // 좌표 갱신. 위치센서 가 있는 경우 수정바람.
+            ascendRep--;
+        }
     }
 
     /**
-     * @brief  셔틀을 홈 포지션(0, 0, 0)으로 복귀시킨다.
+     * @brief  셔틀을 홈 포지션으로 복귀시킨다.
      *         엔드스톱 스위치 기준으로 캘리브레이션한다.
      */
     public void MoveShuttleToHome(ShuttleTest shuttle)
     {
-
+        MoveShuttleToCell(shuttle, shuttle.HomeCell);
     }
 
+    // ============================================================
+    // 구동 메서드
+    // ============================================================
+    // X바퀴, Y바퀴, 크랭크축 회전, 리프트, 그리퍼
+    // ============================================================
+
+    private void MoveShuttleOnXDrive(ShuttleTest shuttle, int deltaX)
+    {
+        // TODO: 모터에 deltaX 값을 전달하여 X축 이동 명령.
+        // 입력: 양수. 음수.
+    }
+    private void MoveShuttleOnYDrive(ShuttleTest shuttle, int deltaY)
+    {
+        // TODO: 모터에 deltaY 값을 전달하여 Y축 이동 명령
+        // 입력: 양수. 음수.
+    }
+    private void SwitchDirectionDrive(ShuttleTest shuttle)
+    {
+        // TODO: 크랭크 축에 회전 명령을 전달하여 X·Y 바퀴 접지 전환
+        // 입력: 펄스.
+    }
+    private void LiftDrive(ShuttleTest shuttle, int deltaZ)
+    {
+        // TODO: 리프트 모터에 deltaZ 값을 전달하여 Bin을 리프팅
+        // 입력: 양수(상승). 음수(하강).
+    }
+    private void GrabDrive(ShuttleTest shuttle)
+    {
+        // TODO: 그리퍼에 명령을 전달하여 Bin을 집음
+        // 입력: 펄스.
+    }
+    private void ReleaseDrive(ShuttleTest shuttle)
+    {
+        // TODO: 그리퍼에 명령을 전달하여 Bin을 놓음
+        // 입력: 펄스.
+    }
     // ============================================================
     // Utility 메서드
     // ============================================================
-
-    /// <summary>
-    /// 해당 셀좌표가 그리드 범위 내에 있는지 확인한다. (0 ≤ x, y, z ≤ gridSize - 1)
-    /// </summary>
-    /// <param name="cell"></param>
-    /// <returns></returns>
-    private bool IsInRange(CellsInt cell)
-    {
-        for (int idx = 0; idx < 3; idx++)
-        {
-            if (cell[idx] < 0 || cell[idx] >  gridSize - 1)
-                return false;
-        }
-        return true;
-    }
     /// <summary>
     /// 해당 (x, y) 좌표가 그리드 범위 내에 있는지 확인한다. (0 ≤ x, y ≤ gridSize - 1) z는 무시된다.
     /// </summary>
@@ -434,11 +598,6 @@ public class BinTransfer
     {
         return x >= 0 && x <= gridSize - 1
             && y >= 0 && y <= gridSize - 1;
-    }
-
-    private bool IsInRangeXY(CellsInt cell)
-    {
-        return IsInRangeXY(cell.x, cell.y);
     }
 
     /// <summary>
