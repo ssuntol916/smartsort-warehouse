@@ -1,8 +1,8 @@
 // ============================================================
 // 파일명  : SliderJointComponent.cs
 // 역할    : SliderJoint 를 씬 오브젝트에 연결하는 MonoBehaviour 컴포넌트
-// 작성자  : 
-// 작성일  : 
+// 작성자  : 이현화
+// 작성일  : 2026-03-
 // 수정이력: 
 // ============================================================
 
@@ -21,7 +21,7 @@ public class SliderJointComponent : MonoBehaviour
 
     /**
      * @brief  오브젝트 A·B 의 Transform 을 기반으로 이동축 Line 과
-     *         기준 Plane 을 생성하고 SliderJoint 를 초기화한다.
+     *         기준 Plane 을 생성하고 SliderJoint 를 초기화한다. (이동방향: 위, 아래)
      *         - 이동축 Line: transform.position → transform.position + transform.up
      *         - 기준 Plane: transform.up 을 법선 벡터로 하는 면
      *                       세 점(position, position+right, position+forward) 으로 정의
