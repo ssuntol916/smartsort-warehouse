@@ -1,9 +1,9 @@
 using UnityEngine;
 
 /**
- * @brief  디버그용 Shuttle 클래스.
+ * @brief  Shuttle 추상 클래스.
  */
-public class ShuttleTest
+public abstract class Shuttle
 {
     private string _id;             // 셔틀의 고유식별자
     private Vector3Int _fromCell;    // 셔틀의 현재 셀 좌표 (X, Y, Z). 여기서 Y는 리프트의 위치
@@ -17,7 +17,7 @@ public class ShuttleTest
     public bool IsTransferring { get => _isTransferring; set => _isTransferring = value; } // 이송 중 여부
     public bool IsHeadingZ { get => _isHeadingZ; set => _isHeadingZ = value; }         // x는 0번 인덱스, z는 2번 인덱스임을 따름
 
-    public ShuttleTest(string id)
+    public Shuttle(string id)
     {
         this._id = id;
         this._fromCell = new Vector3Int(-1, -1, -1);

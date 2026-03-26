@@ -14,38 +14,38 @@ using UnityEngine;
  *
  * 구성
  * - gridSize : const int
- * - _binList : List<Bin 클래스>
- * - _shuttleList : List<Shuttle 클래스>
+ * - _binList : List<Bin>
+ * - _shuttleList : List<Shuttle>
  *
  * 메서드: 등록 및 해제
- * - BinRegister(Bin클래스, int, int) — (X, Z, 맨 위)에 Bin 쌓아서 등록
- * - BinRegister(Bin클래스, Vector3Int) — Y 무시 (X, Z, 맨 위)에 Bin 쌓아서 등록
+ * - BinRegister(Bin, int, int) — (X, Z, 맨 위)에 Bin 쌓아서 등록
+ * - BinRegister(Bin, Vector3Int) — Y 무시 (X, Z, 맨 위)에 Bin 쌓아서 등록
  * - BinUnregister(string) — id 로 Bin 해제. 윗 Bin도 내린다.
  * - BinUnregister(int, int) — (X, Z, 맨 위) Bin 해제.
  * - BinUnregister(Vector3Int) — (X, Y, Z) Bin 해제. 윗 Bin도 내린다.
- * - ShuttleRegister(Shuttle클래스, int, int) — (X, Z)에 Shuttle 등록. HomeCell좌표가 됨.
+ * - ShuttleRegister(Shuttle, int, int) — (X, Z)에 Shuttle 등록. HomeCell좌표가 됨.
  * - ShuttleUnregister(string) — id 로 Shuttle 해제.
  *
  * 메서드: Warehouse 관리
  * - TransferXZ(int, int, int, int) — 출발 좌표 맨위 Bin을 목적 좌표 맨위로 옮김
  *
  * 메서드: Shuttle 제어
- * - MoveShuttleToHome(Shuttle클래스) — 셔틀을 HomeCell 로 옮김
+ * - MoveShuttleToHome(Shuttle) — 셔틀을 HomeCell 로 옮김
  *
  * 메서드: 유틸리티
  * - FindMaxY(int, int) — (X, Z) 의 맨 위 좌표 반환
  *
  * 외부타입
- * - BinTest — Bin 클래스 임시구현
- * - ShuttleTest — Shuttle 클래스 임시구현
+ * - Bin — Bin 추상 클래스
+ * - Shuttle — Shuttle 추상 클래스
  */
 public class BinTransfer
 {
     // 그리드 크기 상수 (3 × 3 × 3)
     public const int gridSize = 3;
     
-    List<BinTest> _binList;     // Bin 1개만 구현.
-    List<ShuttleTest> _shuttleList;    // Bin 을 옮길 셔틀. 메서드에서는 값이 존재해야한다.
+    List<Bin> _binList;     // Bin 1개만 구현.
+    List<Shuttle> _shuttleList;    // Bin 을 옮길 셔틀. 메서드에서는 값이 존재해야한다.
 
     // ============================================================
     // 등록 및 해제
@@ -60,14 +60,14 @@ public class BinTransfer
     // Bin 등록/해제
     /**
      * @brief  Bin 등록. 해당 (x, z) 셀의 가장 위쪽에 배치하고, 배치된 좌표를 알린다.
-     * @param  bin   등록할 BinTest 인스턴스
+     * @param  bin   등록할 Bin 인스턴스
      * @param  initX  초기 X 좌표
      * @param  initZ  초기 Z 좌표
      * @return 실제로 배치된 y 좌표
      * @throws InvalidOperationException  해당 셀이 가득 찼을 때
      * @throws IndexOutOfRangeException  좌표가 그리드 범위를 벗어날 때
      */
-    public Vector3Int BinRegister(BinTest bin, int initX, int initZ)
+    public Vector3Int BinRegister(Bin bin, int initX, int initZ)
     {
         if (!IsInRangeXZ(initX, initZ))
             throw new IndexOutOfRangeException($"셀 ({initX}, {initZ})의 좌표가 그리드 범위를 벗어나므로 BinRegister 불가");
@@ -90,13 +90,13 @@ public class BinTransfer
 
     /**
      * @brief  Bin 등록 (Vector3Int 오버로드). 해당 (x, z) 셀의 가장 위쪽에 배치하고, 배치된 좌표를 알린다.
-     * @param  bin   등록할 BinTest 인스턴스
+     * @param  bin   등록할 Bin 인스턴스
      * @param  cell  초기 셀 좌표 (y는 무시되고 가장 위쪽에 배치)
      * @return 실제로 배치된 셀 좌표
      * @throws InvalidOperationException  해당 셀이 가득 찼을 때
      * @throws IndexOutOfRangeException  좌표가 그리드 범위를 벗어날 때
      */
-    public Vector3Int BinRegister(BinTest bin, Vector3Int cell)
+    public Vector3Int BinRegister(Bin bin, Vector3Int cell)
     {
         return BinRegister(bin, cell.x, cell.z);
     }
@@ -109,7 +109,7 @@ public class BinTransfer
      */
     public void BinUnregister(string id)
     {
-        BinTest bin = _binList.Find(b => b.Id == id);
+        Bin bin = _binList.Find(b => b.Id == id);
         if (bin == null)
             throw new ArgumentException($"id '{id}'에 해당하는 Bin이 존재하지 않으므로 BinUnregister 불가");
         BinUnregisterInternal(bin);
@@ -129,7 +129,7 @@ public class BinTransfer
         if (maxY < 0)
             throw new ArgumentException($"셀 ({x}, {z})에 해당하는 Bin이 존재하지 않으므로 BinUnregister 불가");
 
-        BinTest bin = _binList.Find(b =>
+        Bin bin = _binList.Find(b =>
             b.FromCell.x == x &&
             b.FromCell.z == z &&
             b.FromCell.y == maxY);
@@ -144,7 +144,7 @@ public class BinTransfer
      */
     public void BinUnregister(Vector3Int cell)
     {
-        BinTest bin = _binList.Find(b =>
+        Bin bin = _binList.Find(b =>
             b.FromCell.x == cell.x &&
             b.FromCell.y == cell.y &&
             b.FromCell.z == cell.z);
@@ -155,10 +155,10 @@ public class BinTransfer
 
     /**
      * @brief  Bin 해제 공통 로직. 이송 중 여부를 확인하고, 제거 후 윗층 Bin을 한 층씩 내린다.
-     * @param  bin  해제할 BinTest 인스턴스
+     * @param  bin  해제할 Bin 인스턴스
      * @throws InvalidOperationException  Bin이 이송 중일 때
      */
-    private void BinUnregisterInternal(BinTest bin)
+    private void BinUnregisterInternal(Bin bin)
     {
         if (bin.IsTransferring)
             throw new InvalidOperationException("Bin이 이송 중이므로 BinUnregister 불가");
@@ -170,14 +170,14 @@ public class BinTransfer
     // Shuttle 등록/해제
     /**
      * @brief  Shuttle 등록. 해당 (x, z) 셀에 배치하고, 배치된 좌표를 알린다. y는 gridSize로 고정.
-     * @param  shuttle  등록할 ShuttleTest 인스턴스
+     * @param  shuttle  등록할 Shuttle 인스턴스
      * @param  initX    초기 X 좌표
      * @param  initZ    초기 Z 좌표
      * @return 실제로 배치된 셀 좌표
      * @throws InvalidOperationException  동일 id의 셔틀이 이미 등록되어 있거나, 해당 셀에 이미 셔틀이 존재할 때
      * @throws IndexOutOfRangeException  좌표가 그리드 범위를 벗어날 때
      */
-    public Vector3Int ShuttleRegister(ShuttleTest shuttle, int initX, int initZ)
+    public Vector3Int ShuttleRegister(Shuttle shuttle, int initX, int initZ)
     {
         if (!IsInRangeXZ(initX, initZ))
             throw new IndexOutOfRangeException($"셀 ({initX}, {initZ})의 좌표가 그리드 범위를 벗어나므로 ShuttleRegister 불가");
@@ -206,7 +206,7 @@ public class BinTransfer
      */
     public void ShuttleUnregister(string id)
     {
-        ShuttleTest shuttle = _shuttleList.Find(s => s.Id == id);
+        Shuttle shuttle = _shuttleList.Find(s => s.Id == id);
         if (shuttle == null)
             throw new ArgumentException($"id '{id}'에 해당하는 Shuttle이 존재하지 않으므로 ShuttleUnregister 불가");
         if (shuttle.IsTransferring)
@@ -252,7 +252,7 @@ public class BinTransfer
         Vector3Int toCell = new Vector3Int(toX, toMaxY + 1, toZ);
 
         // Bin, Shuttle 획득. 작업중 체크.
-        BinTest bin = _binList.Find(b =>
+        Bin bin = _binList.Find(b =>
             b.FromCell.x == fromCell.x &&
             b.FromCell.y == fromCell.y &&
             b.FromCell.z == fromCell.z);
@@ -260,7 +260,7 @@ public class BinTransfer
         bin.ToCell = toCell;
         bin.IsTransferring = true;
 
-        ShuttleTest shuttle = FindNearShuttle(fromCell);
+        Shuttle shuttle = FindNearShuttle(fromCell);
 
         // 동작: 출발지이동 → 리프팅 → 목적지이동 → 하강
         MoveShuttleToCell(shuttle, fromCell);
@@ -282,12 +282,12 @@ public class BinTransfer
     /**
      * @brief  사용할 수 있는 가까운 셔틀을 할당한다.
     */
-    private ShuttleTest FindNearShuttle(Vector3Int cell)
+    private Shuttle FindNearShuttle(Vector3Int cell)
     {
-        ShuttleTest nearest = null;
+        Shuttle nearest = null;
         int minDist = int.MaxValue;
 
-        foreach (ShuttleTest s in _shuttleList)
+        foreach (Shuttle s in _shuttleList)
         {
             if (s.IsTransferring)
                 continue;
@@ -315,12 +315,12 @@ public class BinTransfer
     /**
      * @brief  Shuttle을 해당 셀의 (x, z) 좌표로 이동시킨다. y는 무시된다.
      *         정밀도를 위해 기본 7회까지 반복한다.
-     * @param  shuttle  이동시킬 ShuttleTest 인스턴스
+     * @param  shuttle  이동시킬 Shuttle 인스턴스
      * @param  cell     목적 셀 좌표
      * @param  rep      재귀 깊이 (기본 7)
      * @throws InvalidOperationException  재귀 횟수 초과 시
      */
-    private void MoveShuttleToCell(ShuttleTest shuttle, Vector3Int cell, int rep = 7)
+    private void MoveShuttleToCell(Shuttle shuttle, Vector3Int cell, int rep = 7)
     {
         while (true)
         {
@@ -360,7 +360,7 @@ public class BinTransfer
     /**
      * @brief  X·Z 바퀴 접지를 무조건 전환한다.
      */
-    private void SwitchDirection(ShuttleTest shuttle)
+    private void SwitchDirection(Shuttle shuttle)
     {
         shuttle.IsHeadingZ = !shuttle.IsHeadingZ;
         SwitchDirectionDrive(shuttle);
@@ -368,9 +368,9 @@ public class BinTransfer
 
     /**
      * @brief  스풀/벨트를 감아올려 목적 층의 Bin을 리프팅한다.
-     * @param  shuttle  리프팅을 수행할 ShuttleTest 인스턴스
+     * @param  shuttle  리프팅을 수행할 Shuttle 인스턴스
      */
-    private void LiftBin(ShuttleTest shuttle, int rep = 7)
+    private void LiftBin(Shuttle shuttle, int rep = 7)
     {
         // Shuttle의 리프트가 제자리에 있는지 확인
         if (shuttle.FromCell.y != gridSize)
@@ -417,9 +417,9 @@ public class BinTransfer
     }
     /**
      * @brief  스풀/벨트를 풀어 Bin을 현재 층에 내려놓는다.
-     * @param  shuttle  하강을 수행할 ShuttleTest 인스턴스
+     * @param  shuttle  하강을 수행할 Shuttle 인스턴스
      */
-    private void LowerBin(ShuttleTest shuttle, int rep = 7)
+    private void LowerBin(Shuttle shuttle, int rep = 7)
     {
         // Shuttle의 리프트가 제자리에 있는지 확인
         if (shuttle.FromCell.y != gridSize)
@@ -468,7 +468,7 @@ public class BinTransfer
      * @brief  셔틀을 홈 포지션으로 복귀시킨다.
      *         엔드스톱 스위치 기준으로 캘리브레이션한다.
      */
-    public void MoveShuttleToHome(ShuttleTest shuttle)
+    public void MoveShuttleToHome(Shuttle shuttle)
     {
         MoveShuttleToCell(shuttle, shuttle.HomeCell);
     }
@@ -479,32 +479,32 @@ public class BinTransfer
     // X바퀴, Z바퀴, 크랭크축 회전, 리프트, 그리퍼
     // ============================================================
 
-    private void MoveShuttleOnXDrive(ShuttleTest shuttle, int deltaX)
+    private void MoveShuttleOnXDrive(Shuttle shuttle, int deltaX)
     {
         // TODO: 모터에 deltaX 값을 전달하여 X축 이동 명령.
         // 입력: 양수. 음수.
     }
-    private void MoveShuttleOnZDrive(ShuttleTest shuttle, int deltaZ)
+    private void MoveShuttleOnZDrive(Shuttle shuttle, int deltaZ)
     {
         // TODO: 모터에 deltaZ 값을 전달하여 Z축 이동 명령
         // 입력: 양수. 음수.
     }
-    private void SwitchDirectionDrive(ShuttleTest shuttle)
+    private void SwitchDirectionDrive(Shuttle shuttle)
     {
         // TODO: 크랭크 축에 회전 명령을 전달하여 X·Z 바퀴 접지 전환
         // 입력: 펄스.
     }
-    private void LiftDrive(ShuttleTest shuttle, int deltaY)
+    private void LiftDrive(Shuttle shuttle, int deltaY)
     {
         // TODO: 리프트 모터에 deltaY 값을 전달하여 Bin을 리프팅
         // 입력: 양수(상승). 음수(하강).
     }
-    private void GrabDrive(ShuttleTest shuttle)
+    private void GrabDrive(Shuttle shuttle)
     {
         // TODO: 그리퍼에 명령을 전달하여 Bin을 집음
         // 입력: 펄스.
     }
-    private void ReleaseDrive(ShuttleTest shuttle)
+    private void ReleaseDrive(Shuttle shuttle)
     {
         // TODO: 그리퍼에 명령을 전달하여 Bin을 놓음
         // 입력: 펄스.
@@ -533,7 +533,7 @@ public class BinTransfer
     public int FindMaxY(int initX, int initZ)
     {
         int maxY = -1;
-        foreach (BinTest b in _binList)
+        foreach (Bin b in _binList)
         {
             if (b.FromCell.x == initX && b.FromCell.z == initZ && b.FromCell.y > maxY)
                 maxY = b.FromCell.y;
@@ -547,12 +547,12 @@ public class BinTransfer
      */
     private void LowerUpperBins(Vector3Int removedCell)
     {
-        List<BinTest> upperBins = _binList.FindAll(b =>
+        List<Bin> upperBins = _binList.FindAll(b =>
             b.FromCell.x == removedCell.x &&
             b.FromCell.z == removedCell.z &&
             b.FromCell.y > removedCell.y);
         upperBins.Sort((a, b) => a.FromCell.y.CompareTo(b.FromCell.y));
-        foreach (BinTest upperBin in upperBins)
+        foreach (Bin upperBin in upperBins)
         {
             Vector3Int lowered = new Vector3Int(upperBin.FromCell.x, upperBin.FromCell.y - 1, upperBin.FromCell.z);
             upperBin.FromCell = lowered;
