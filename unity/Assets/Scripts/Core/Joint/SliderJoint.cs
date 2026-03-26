@@ -80,6 +80,6 @@ public class SliderJoint : Joint
      */
     public override bool IsValid()
     {
-
+        return false;
     }
 }

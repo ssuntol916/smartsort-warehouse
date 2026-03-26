@@ -61,6 +61,6 @@ public class RevoluteJoint : Joint
      */
     public override bool IsValid()
     {
-
+        return false;
     }
 }
