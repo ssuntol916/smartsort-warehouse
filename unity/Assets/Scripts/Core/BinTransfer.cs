@@ -55,7 +55,11 @@ public class BinTransfer
     /**
      * @brief  생성자. Bin과 Shuttle의 등록은 메서드를 통해 이루어진다.
      */
-    public BinTransfer() {}
+    public BinTransfer()
+    {
+        _binList = new List<Bin>();
+        _shuttleList = new List<Shuttle>();
+    }
 
     // Bin 등록/해제
     /**
