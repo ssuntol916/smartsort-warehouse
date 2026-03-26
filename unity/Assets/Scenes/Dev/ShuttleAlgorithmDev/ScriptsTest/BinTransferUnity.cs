@@ -14,7 +14,6 @@ public class BinTransferUnity : MonoBehaviour
     public TMP_InputField genBinInputId;
     public TMP_InputField genBinInputX;
     public TMP_InputField genBinInputZ;
-    public TMP_InputField genBinInputY;
     public Button genShuttle;
     public TMP_InputField genShuttleInputId;
     public TMP_InputField genShuttleInputX;
@@ -67,7 +66,6 @@ public class BinTransferUnity : MonoBehaviour
     /**@brief
      * @ 1. Id,X,Z만 작성되면 BinTestUnity prefab 생성뒤, BinTest가 Id를 가지도록 하고, BinRegister 메서드에 bin과 X,Z 넣음.
 	 * 2. Id,X,Z,Y 가 작성되면 BinTestUnity prefab 생성뒤, BinTest가 Id를 가지도록 하고, BinRegister 메서드에 bin과 X,Z,Y 넣음.
-     * 
      */
     void OnGenBin()
     {
@@ -76,6 +74,11 @@ public class BinTransferUnity : MonoBehaviour
         if (string.IsNullOrEmpty(id))
         {
             Debug.LogError("[BinTransferUnity] GenBin: Id는 필수 입력입니다.");
+            return;
+        }
+        if (_binInstances.ContainsKey(id))
+        {
+            Debug.LogError($"[BinTransferUnity] GenBin: Id '{id}'가 이미 존재합니다.");
             return;
         }
         if (!int.TryParse(genBinInputX.text, out int x) ||
@@ -90,16 +93,21 @@ public class BinTransferUnity : MonoBehaviour
         BinTestUnity binUnity = go.GetComponent<BinTestUnity>();
         binUnity.Initialize(id);
 
-        // BinRegister 호출 (Y 입력 여부에 따라 오버로드된 메서드 선택)
-        Vector3Int placed;
-        if (int.TryParse(genBinInputY.text, out int y))
-            placed = _binTransfer.BinRegister(binUnity.binTest, new Vector3Int(x, y, z));
-        else
-            placed = _binTransfer.BinRegister(binUnity.binTest, x, z);
-
         // Bin이 배치된 위치로 GameObject 이동
+        Vector3Int placed;
+        try
+        {
+            placed = _binTransfer.BinRegister(binUnity.binTest, x, z);
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"[BinTransferUnity] GenBin: 등록 실패 → {e.Message}");
+            Destroy(go);
+            return;
+        }
         go.transform.position = new Vector3(placed.x, placed.y, placed.z);
         _binInstances[id] = binUnity;
+        genBinInputId.text = "";
     }
 
     void OnGenShuttle()
@@ -109,6 +117,11 @@ public class BinTransferUnity : MonoBehaviour
         if (string.IsNullOrEmpty(id))
         {
             Debug.LogError("[BinTransferUnity] GenShuttle: Id는 필수 입력입니다.");
+            return;
+        }
+        if (_shuttleInstances.ContainsKey(id))
+        {
+            Debug.LogError($"[BinTransferUnity] GenShuttle: Id '{id}'가 이미 존재합니다.");
             return;
         }
         if (!int.TryParse(genShuttleInputX.text, out int x) ||
@@ -124,9 +137,20 @@ public class BinTransferUnity : MonoBehaviour
         shuttleUnity.Initialize(id);
 
         // ShuttleRegister 호출
-        Vector3Int placed = _binTransfer.ShuttleRegister(shuttleUnity.shuttleTest, x, z);
+        Vector3Int placed;
+        try
+        {
+            placed = _binTransfer.ShuttleRegister(shuttleUnity.shuttleTest, x, z);
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"[BinTransferUnity] GenShuttle: 등록 실패 → {e.Message}");
+            Destroy(go);
+            return;
+        }
         go.transform.position = new Vector3(placed.x, placed.y, placed.z);
         _shuttleInstances[id] = shuttleUnity;
+        genShuttleInputId.text = "";
     }
 
     // ============================================================
@@ -147,11 +171,8 @@ public class BinTransferUnity : MonoBehaviour
         _binTransfer.BinUnregister(id);
 
         // 해당 Bin이 존재하면 GameObject 제거
-        if (_binInstances.TryGetValue(id, out BinTestUnity binUnity))
-        {
-            Destroy(binUnity.gameObject);
-            _binInstances.Remove(id);
-        }
+        _binInstances.Remove(id);
+        degenBinIdInputId.text = "";
     }
 
     void OnDegenBinCoord()
@@ -194,9 +215,8 @@ public class BinTransferUnity : MonoBehaviour
             _binTransfer.BinUnregister(x, z);
         }
 
-        if (removedId != null && _binInstances.TryGetValue(removedId, out BinTestUnity binUnity))
+        if (removedId != null)
         {
-            Destroy(binUnity.gameObject);
             _binInstances.Remove(removedId);
         }
     }
@@ -212,11 +232,8 @@ public class BinTransferUnity : MonoBehaviour
 
         _binTransfer.ShuttleUnregister(id);
 
-        if (_shuttleInstances.TryGetValue(id, out ShuttleTestUnity shuttleUnity))
-        {
-            Destroy(shuttleUnity.gameObject);
-            _shuttleInstances.Remove(id);
-        }
+        _shuttleInstances.Remove(id);
+        degenShuttleInputId.text = "";
     }
 
     // ============================================================
