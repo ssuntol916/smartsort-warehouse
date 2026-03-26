@@ -19,14 +19,15 @@ public class RevoluteJoint : Joint
     public float MaxAngle => _maxAngle;           // 최대 회전 각도
 
     /**
-     * @brief  회전 조인트를 생성한다.
-     * @param  position    조인트 위치 (Vector3)
-     * @param  axis        회전축 방향 벡터 (Vector3)
-     * @param  minAngle    최소 회전 각도 (degree)
-     * @param  maxAngle    최대 회전 각도 (degree)
+     * @brief  두 선을 회전축으로 하는 회전 조인트를 생성한다.
+     *         lineA 와 lineB 가 일치(Coincident)할 때 유효한 조인트가 된다.
+     * @param  lineA      오브젝트 A 의 회전축 Line
+     * @param  lineB      오브젝트 B 의 회전축 Line
+     * @param  minAngle   최소 회전 각도 (degree)
+     * @param  maxAngle   최대 회전 각도 (degree)
      */
-    public RevoluteJoint(Vector3 position, Vector3 axis,
-                         float minAngle, float maxAngle) : base(position, axis)
+    public RevoluteJoint(Line lineA, Line lineB,
+                         float minAngle, float maxAngle) : base(lineA, lineB)
     {
         _minAngle = minAngle;
         _maxAngle = maxAngle;
@@ -45,7 +46,8 @@ public class RevoluteJoint : Joint
 
     /**
      * @brief  회전 구속 조건을 적용한다.
-     *         현재 각도를 기준으로 회전축 방향의 회전 변환을 계산한다.
+     *         lineA 와 lineB 가 일치하도록 오브젝트 B 의 위치를 보정하고,
+     *         현재 각도를 기준으로 lineA 축 방향의 회전 변환을 계산한다.
      */
     public override void ApplyConstraint()
     {
@@ -54,7 +56,7 @@ public class RevoluteJoint : Joint
 
     /**
      * @brief  회전 조인트가 유효한 상태인지 검증한다.
-     *         min/max 범위가 올바르고 축 벡터가 영벡터가 아니면 유효하다.
+     *         lineA 와 lineB 가 평행하고 min/max 범위가 올바르면 유효하다.
      * @return bool  유효하면 true, 아니면 false
      */
     public override bool IsValid()
