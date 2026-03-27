@@ -6,8 +6,6 @@
 // 수정이력: 
 // ============================================================
 
-using System.Threading.Tasks;
-using Unity.VisualScripting.YamlDotNet.Core.Tokens;
 using UnityEngine;
 
 public class SliderJoint : Joint
@@ -24,9 +22,11 @@ public class SliderJoint : Joint
     private bool _isLineConstrained;    // lineA ↔ lineB 구속 등록됐는지
     private bool _isPlaneConstrained;   // planeA ↔ planeB 구속 등록됐는지
 
-    public float CurrentPosition => _currentPosition;   // 현재 슬라이더 위치
-    public float MinPosition => _minPosition;           // 최소 이동 범위
-    public float MaxPosition => _maxPosition;           // 최대 이동 범위
+    public float CurrentPosition => _currentPosition;    // 현재 슬라이더 위치
+    public float MinPosition => _minPosition;            // 최소 이동 범위
+    public float MaxPosition => _maxPosition;            // 최대 이동 범위
+    public bool IsLineConstrained => _isLineConstrained; // Line 구속 등록 여부
+    public bool IsPlaneConstrained => _isPlaneConstrained; // Plane 구속 등록 여부
 
     /**
      * @brief  두 선(이동축)과 두 면(기준면)으로 슬라이더 조인트를 생성한다.
@@ -62,6 +62,7 @@ public class SliderJoint : Joint
         _currentPosition = Mathf.Clamp(position, _minPosition, _maxPosition);
     }
 
+    //TODO: 추후에 다시 확인 - 구속된 오브젝트끼리 위치가 다르면 구속된 형태로 변경되게끔 하는 작업 이후
     /**
      * @brief  슬라이더 구속 조건을 적용한다.
      *         아래 두 조건을 동시에 만족하도록 오브젝트 B 를 보정한다.

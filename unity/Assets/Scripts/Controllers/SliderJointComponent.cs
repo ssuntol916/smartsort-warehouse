@@ -16,6 +16,8 @@ public class SliderJointComponent : MonoBehaviour
     [SerializeField] private float _maxPosition = 100f;   // 최대 이동 범위 (mm)
 
     private SliderJoint _joint;   // SliderJoint.cs 인스턴스
+    private Rigidbody _rigidbodyA;  // 오브젝트 A 리지드바디
+    private Rigidbody _rigidbodyB;  // 오브젝트 B 리지드바디
 
     public float CurrentPosition => _joint?.CurrentPosition ?? 0f;   // 현재 슬라이더 위치
 
@@ -47,6 +49,10 @@ public class SliderJointComponent : MonoBehaviour
         _joint = new SliderJoint(lineA, lineB,
                                  planeA, planeB,
                                  _minPosition, _maxPosition);
+
+        // 오브젝드 리지드바디 생성
+        _rigidbodyA = InitializeRigidbody(_objectA);
+        _rigidbodyB = InitializeRigidbody(_objectB);
     }
 
     /**
@@ -94,5 +100,21 @@ public class SliderJointComponent : MonoBehaviour
         _joint = new SliderJoint(lineA, lineB,
                                  planeA, planeB,
                                  _minPosition, _maxPosition);
+    }
+
+    /**
+    * @brief  오브젝트의 Rigidbody 를 가져온다.
+    *         Rigidbody 가 없으면 자동으로 생성한다.
+    * @param  target    대상 오브젝트의 Transform
+    * @return Rigidbody 가져오거나 생성한 Rigidbody
+    */
+    private Rigidbody InitializeRigidbody(Transform target)
+    {
+        Rigidbody rb = target.GetComponent<Rigidbody>();
+        if (rb == null)
+        {
+            rb = target.gameObject.AddComponent<Rigidbody>();
+        }
+        return rb;
     }
 }
