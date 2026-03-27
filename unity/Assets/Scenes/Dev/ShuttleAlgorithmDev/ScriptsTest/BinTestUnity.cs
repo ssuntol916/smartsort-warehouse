@@ -9,15 +9,18 @@ public class BinTestUnity : MonoBehaviour
 
     public BinTest binTest;
     Vector3Int _lastFromCell;
-
+    [SerializeField] string _id;
+    [SerializeField] bool _onDuty;
     public void Initialize(string id)
     {
         binTest = new BinTest(id);
+        _id = binTest.Id;
         _lastFromCell = binTest.FromCell;
     }
 
     void Update()
     {
+        _onDuty = binTest.OnDuty;
         if (binTest == null) return;
         if (binTest.FromCell != _lastFromCell)
         {

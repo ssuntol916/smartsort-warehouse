@@ -29,16 +29,20 @@ public class BinTransferUnity : MonoBehaviour
     public Button degenShuttle;
     public TMP_InputField degenShuttleInputId;
 
+    [Header("Shuttle")]
+    public Button shuttleToCell;
+    public TMP_InputField shuttleToCellInputId;
+    public TMP_InputField shuttleToCellInputToX;
+    public TMP_InputField shuttleToCellInputToZ;
+    public Button shuttleToHome;
+    public TMP_InputField shuttleToHomeInputId;
+
     [Header("Transfer")]
     public Button transferXZ;
     public TMP_InputField transferXZInputFromX;
     public TMP_InputField transferXZInputFromZ;
     public TMP_InputField transferXZInputToX;
     public TMP_InputField transferXZInputToZ;
-
-    [Header("Shuttle")]
-    public Button shuttleToHome;
-    public TMP_InputField shuttleToHomeInputId;
 
     BinTransfer _binTransfer;
     readonly Dictionary<string, BinTestUnity> _binInstances = new Dictionary<string, BinTestUnity>();
@@ -57,6 +61,7 @@ public class BinTransferUnity : MonoBehaviour
         degenBinCoord.onClick.AddListener(OnDegenBinCoord);
         degenShuttle.onClick.AddListener(OnDegenShuttle);
         transferXZ.onClick.AddListener(OnTransferXZ);
+        shuttleToCell.onClick.AddListener(OnShuttleToCell);
         shuttleToHome.onClick.AddListener(OnShuttleToHome);
     }
 
@@ -76,11 +81,11 @@ public class BinTransferUnity : MonoBehaviour
             Debug.LogError("[BinTransferUnity] GenBin: Id는 필수 입력입니다.");
             return;
         }
-        if (_binInstances.ContainsKey(id))
-        {
-            Debug.LogError($"[BinTransferUnity] GenBin: Id '{id}'가 이미 존재합니다.");
-            return;
-        }
+        //if (_binInstances.ContainsKey(id))
+        //{
+        //    Debug.LogError($"[BinTransferUnity] GenBin: Id '{id}'가 이미 존재합니다.");
+        //    return;
+        //}
         if (!int.TryParse(genBinInputX.text, out int x) ||
             !int.TryParse(genBinInputZ.text, out int z))
         {
@@ -119,11 +124,11 @@ public class BinTransferUnity : MonoBehaviour
             Debug.LogError("[BinTransferUnity] GenShuttle: Id는 필수 입력입니다.");
             return;
         }
-        if (_shuttleInstances.ContainsKey(id))
-        {
-            Debug.LogError($"[BinTransferUnity] GenShuttle: Id '{id}'가 이미 존재합니다.");
-            return;
-        }
+        //if (_shuttleInstances.ContainsKey(id))
+        //{
+        //    Debug.LogError($"[BinTransferUnity] GenShuttle: Id '{id}'가 이미 존재합니다.");
+        //    return;
+        //}
         if (!int.TryParse(genShuttleInputX.text, out int x) ||
             !int.TryParse(genShuttleInputZ.text, out int z))
         {
@@ -184,40 +189,23 @@ public class BinTransferUnity : MonoBehaviour
             return;
         }
 
-        string removedId = null;
+        Bin removedBin;
 
         if (int.TryParse(degenBinCoordInputY.text, out int y))
         {
             Vector3Int cell = new Vector3Int(x, y, z);
-            foreach (var kvp in _binInstances)
-            {
-                if (kvp.Value.binTest.FromCell == cell)
-                {
-                    removedId = kvp.Key;
-                    break;
-                }
-            }
+            removedBin = _binTransfer.FindBinByCell(cell);
             _binTransfer.BinUnregister(cell);
         }
         else
         {
-            int maxY = _binTransfer.FindMaxY(x, z);
-            foreach (var kvp in _binInstances)
-            {
-                if (kvp.Value.binTest.FromCell.x == x &&
-                    kvp.Value.binTest.FromCell.z == z &&
-                    kvp.Value.binTest.FromCell.y == maxY)
-                {
-                    removedId = kvp.Key;
-                    break;
-                }
-            }
+            removedBin = _binTransfer.FindBinByCell(x, z);
             _binTransfer.BinUnregister(x, z);
         }
 
-        if (removedId != null)
+        if (removedBin != null)
         {
-            _binInstances.Remove(removedId);
+            _binInstances.Remove(removedBin.Id);
         }
     }
 
@@ -258,6 +246,38 @@ public class BinTransferUnity : MonoBehaviour
     // Shuttle
     // ============================================================
 
+    void OnShuttleToCell()
+    {
+        string id = shuttleToCellInputId.text;
+        if (string.IsNullOrEmpty(id))
+        {
+            Debug.LogError("[BinTransferUnity] ShuttleToCell: Id는 필수 입력입니다.");
+            return;
+        }
+        if (!int.TryParse(shuttleToCellInputToX.text, out int toX) ||
+            !int.TryParse(shuttleToCellInputToZ.text, out int toZ))
+        {
+            Debug.LogError("[BinTransferUnity] ShuttleToCell: ToX, ToZ는 필수 입력입니다.");
+            return;
+        }
+
+        Shuttle shuttle = _binTransfer.FindShuttleById(id);
+        if (shuttle == null)
+        {
+            Debug.LogError($"[BinTransferUnity] ShuttleToCell: id '{id}'에 해당하는 Shuttle을 찾을 수 없습니다.");
+            return;
+        }
+
+        try
+        {
+            _binTransfer.MoveShuttleToCell(shuttle, toX, toZ);
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"[BinTransferUnity] ShuttleToCell: 이동 실패 → {e.Message}");
+        }
+    }
+
     void OnShuttleToHome()
     {
         string id = shuttleToHomeInputId.text;
@@ -267,13 +287,20 @@ public class BinTransferUnity : MonoBehaviour
             return;
         }
 
-        if (_shuttleInstances.TryGetValue(id, out ShuttleTestUnity shuttleUnity))
-        {
-            _binTransfer.MoveShuttleToHome(shuttleUnity.shuttleTest);
-        }
-        else
+        Shuttle shuttle = _binTransfer.FindShuttleById(id);
+        if (shuttle == null)
         {
             Debug.LogError($"[BinTransferUnity] ShuttleToHome: id '{id}'에 해당하는 Shuttle을 찾을 수 없습니다.");
+            return;
+        }
+
+        try
+        {
+            _binTransfer.MoveShuttleToHome(shuttle);
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"[BinTransferUnity] ShuttleToHome: 이동 실패 → {e.Message}");
         }
     }
 }

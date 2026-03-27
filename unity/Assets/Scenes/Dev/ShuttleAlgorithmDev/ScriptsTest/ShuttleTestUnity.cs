@@ -9,15 +9,19 @@ public class ShuttleTestUnity : MonoBehaviour
 
     public ShuttleTest shuttleTest;
     Vector3Int _lastFromCell;
+    [SerializeField] string _id;
+    [SerializeField] bool _onDuty;
 
     public void Initialize(string id)
     {
         shuttleTest = new ShuttleTest(id);
+        _id = shuttleTest.Id;
         _lastFromCell = shuttleTest.FromCell;
     }
 
     void Update()
     {
+        _onDuty = shuttleTest.OnDuty;
         if (shuttleTest == null) return;
         if (shuttleTest.FromCell != _lastFromCell)
         {
