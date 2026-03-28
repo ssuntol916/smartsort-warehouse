@@ -97,3 +97,31 @@ InitTestScene*.unity*
 
 # Auto-generated scenes by play mode tests
 /[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
+
+# ============================================================
+# 패키지 매니저 임포트 에셋 (TMP Essentials)
+# ============================================================
+/[Aa]ssets/TextMesh Pro/
+/[Aa]ssets/TextMesh Pro.meta
+
+# ============================================================
+# URP 템플릿 기본 파일 (프로젝트 생성 시 자동 포함)
+# ============================================================
+/[Aa]ssets/TutorialInfo/
+/[Aa]ssets/TutorialInfo.meta
+/[Aa]ssets/Readme.asset
+/[Aa]ssets/Readme.asset.meta
+
+# ============================================================
+# 라이팅 베이크 자동 생성 파일
+# ============================================================
+**/LightingData.asset
+**/LightingData.asset.meta
+**/ReflectionProbe-*.exr
+**/ReflectionProbe-*.exr.meta
+
+# ============================================================
+# IDE 개인 설정
+# ============================================================
+.vscode/
+.vsconfig
