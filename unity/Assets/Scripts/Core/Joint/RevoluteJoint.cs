@@ -49,9 +49,9 @@ public class RevoluteJoint : Joint
      *         lineA 와 lineB 가 일치하도록 오브젝트 B 의 위치를 보정하고,
      *         현재 각도를 기준으로 lineA 축 방향의 회전 변환을 계산한다.
      */
-    public override void ApplyConstraint()
+    public override bool ApplyConstraint()
     {
-
+        return false;
     }
 
     /**
