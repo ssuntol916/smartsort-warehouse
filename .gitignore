@@ -4,3 +4,8 @@
 
 # 민감 설정 파일
 **/secrets.h
+
+# 환경변수 (API 키, DB 비밀번호)
+.env
+.env.*
+!.env.example
