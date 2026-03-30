@@ -2,7 +2,7 @@
 // 파일명  : SliderJoint.cs
 // 역할    : 슬라이더 조인트 클래스
 // 작성자  : 이현화
-// 작성일  : 2026-03-
+// 작성일  : 2026-03-30
 // 수정이력: 
 // ============================================================
 
@@ -10,22 +10,22 @@ using UnityEngine;
 
 public class SliderJoint : Joint
 {
-    private Line _lineA;     // 오브젝트 A 의 이동축 선
-    private Line _lineB;     // 오브젝트 B 의 이동축 선
-    private Plane _planeA;   // 오브젝트 A 의 기준 면 (회전 방지)
-    private Plane _planeB;   // 오브젝트 B 의 기준 면 (회전 방지)
+    private Line _lineA;                // 오브젝트 A 의 이동축 선
+    private Line _lineB;                // 오브젝트 B 의 이동축 선
+    private Plane _planeA;              // 오브젝트 A 의 기준 면 (회전 방지)
+    private Plane _planeB;              // 오브젝트 B 의 기준 면 (회전 방지)
 
-    private float _currentPosition;   // 현재 슬라이더 위치 (mm)
-    private float _minPosition;       // 최소 이동 범위 (mm)
-    private float _maxPosition;       // 최대 이동 범위 (mm)
+    private float _currentPosition;     // 현재 슬라이더 위치 (mm)
+    private float _minPosition;         // 최소 이동 범위 (mm)
+    private float _maxPosition;         // 최대 이동 범위 (mm)
 
     private bool _isLineConstrained;    // lineA ↔ lineB 구속 등록됐는지
     private bool _isPlaneConstrained;   // planeA ↔ planeB 구속 등록됐는지
 
-    public float CurrentPosition => _currentPosition;    // 현재 슬라이더 위치
-    public float MinPosition => _minPosition;            // 최소 이동 범위
-    public float MaxPosition => _maxPosition;            // 최대 이동 범위
-    public bool IsLineConstrained => _isLineConstrained; // Line 구속 등록 여부
+    public float CurrentPosition => _currentPosition;      // 현재 슬라이더 위치
+    public float MinPosition => _minPosition;              // 최소 이동 범위
+    public float MaxPosition => _maxPosition;              // 최대 이동 범위
+    public bool IsLineConstrained => _isLineConstrained;   // Line 구속 등록 여부
     public bool IsPlaneConstrained => _isPlaneConstrained; // Plane 구속 등록 여부
 
     /**

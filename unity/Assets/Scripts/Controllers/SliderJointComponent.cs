@@ -2,7 +2,7 @@
 // 파일명  : SliderJointComponent.cs
 // 역할    : SliderJoint 를 씬 오브젝트에 연결하는 MonoBehaviour 컴포넌트
 // 작성자  : 이현화
-// 작성일  : 2026-03-
+// 작성일  : 2026-03-30
 // 수정이력: 
 // ============================================================
 
@@ -16,13 +16,14 @@ public class SliderJointComponent : MonoBehaviour
     [SerializeField] private float _maxPosition = 100f;                  // 최대 이동 범위 (mm)
     [SerializeField] private Vector3 _moveDirection = Vector3.right;     // 슬라이더 이동 방향
 
-    private SliderJoint _joint;        // SliderJoint.cs 인스턴스
-    private Rigidbody _rigidbodyA;     // 오브젝트 A 리지드바디
-    private Rigidbody _rigidbodyB;     // 오브젝트 B 리지드바디
+    private SliderJoint _joint;                      // SliderJoint.cs 인스턴스
+    private Rigidbody _rigidbodyA;                   // 오브젝트 A 리지드바디
+    private Rigidbody _rigidbodyB;                   // 오브젝트 B 리지드바디
+    private RigidbodyConstraints _freezeConstraint;  // 이동 방향 기준 프리즈 조건 (캐시)
 
-    private bool _wasConstrained;      // 이전 프레임 구속 상태
-    private float _actualMinPosition;  // B 초기 위치 기준 실제 최소 이동 범위
-    private float _actualMaxPosition;  // B 초기 위치 기준 실제 최대 이동 범위
+    private bool _wasConstrained;                    // 이전 프레임 구속 상태
+    private float _actualMinPosition;                // B 초기 위치 기준 실제 최소 이동 범위
+    private float _actualMaxPosition;                // B 초기 위치 기준 실제 최대 이동 범위
 
     public float CurrentPosition => _joint?.CurrentPosition ?? 0f;   // 현재 슬라이더 위치
 
@@ -36,43 +37,24 @@ public class SliderJointComponent : MonoBehaviour
      */
     private void Awake()
     {
+        // 이동 방향 벡터 정규화 (GetProjectedDistance 거리 계산 및 위치 계산 정확도 보장)
+        _moveDirection = _moveDirection.normalized;
+        
+        _freezeConstraint = GetFreezeConstraintByDirection();
+
+        Debug.Log($"SliderJointComponent: 이동축이 {_moveDirection} 으로 설정되었습니다. \nInspector 에서도 설정된 이동축 확인이 가능합니다.");
+
         // 오브젝트 리지드바디 생성 및 고정 오브젝트(Kinematic) 설정 확인
         _rigidbodyA = InitializeRigidbody(_objectA, true);
         _rigidbodyB = InitializeRigidbody(_objectB, false);
 
-        // 오브젝트 A·B 의 Transform 에서 이동축 Line 생성
-        Line lineA = new Line(_objectA.position,
-                              _objectA.position + _moveDirection);
-        Line lineB = new Line(_objectB.position,
-                              _objectB.position + _moveDirection);
-
-        // 오브젝트 A·B 의 Transform 에서 기준 Plane 생성
-        // transform.right, transform.forward 로 면의 세 점 정의
-        Plane planeA = new Plane(_objectA.position,
-                                 _objectA.position + _objectA.right,
-                                 _objectA.position + _objectA.forward);
-        Plane planeB = new Plane(_objectB.position,
-                                 _objectB.position + _objectB.right,
-                                 _objectB.position + _objectB.forward);
-
-        // B 의 초기 위치를 이동축에 투영하여 초기 거리 계산
-        float initialDistance = SliderJoint.GetProjectedDistance(
-            lineA, _objectB.position, _objectA.position, _moveDirection);
-
-        // min/max 를 B 의 초기 위치 기준 offset 으로 적용
-        _actualMinPosition = initialDistance + _minPosition;
-        _actualMaxPosition = initialDistance + _maxPosition;
-
-        // SliderJoint.cs 인스턴스 생성
-        _joint = new SliderJoint(lineA, lineB,
-                                 planeA, planeB,
-                                 _actualMinPosition, _actualMaxPosition);
+        InitializeJoint();
 
     }
 
     //TODO: 추후에 다시 확인 - 프리즈 대신 '구속 조건이 풀리면 → 다시 구속 위치로 이동' 구현 예정
     /**
-     * @brief  매 프레임 SliderJoint.ApplyConstraint() 를 호출하여 구속 조건 등록 상태를 확인한다.
+     * @brief  매 물리 프레임(FixedUpdate) SliderJoint.ApplyConstraint() 를 호출하여 구속 조건 등록 상태를 확인한다.
      *         구속 조건이 참이면 이동 방향 축을 제외한 나머지를 프리즈하고 클램프를 적용한다.
      *         ※ 프리즈는 구속 조건 확인을 위한 임시 코드로 추후 변경 예정
      */
@@ -93,8 +75,8 @@ public class SliderJointComponent : MonoBehaviour
         // 구속 조건이 참이면 프리즈, 아니면 해제
         if (isConstrained)
         {
-            _rigidbodyB.constraints = GetFreezeConstraintByDirection();
-             
+            _rigidbodyB.constraints = _freezeConstraint;
+
             // 오브젝트 B 의 현재 위치를 lineA 에 투영하여 거리를 계산하고
             // min/max 범위 안에서만 움직이도록 클램프 처리
             Vector3 clampedPos = _joint.GetClampedPosition(_objectB.position, _objectA.position, _moveDirection);
@@ -128,24 +110,8 @@ public class SliderJointComponent : MonoBehaviour
      */
     private void OnValidate()
     {
-        if (_objectA == null || _objectB == null) return;
-        if (Application.isPlaying) return;  // Play 모드에서는 실행하지 않는다
-
-        Line lineA = new Line(_objectA.position,
-                              _objectA.position + _moveDirection);
-        Line lineB = new Line(_objectB.position,
-                              _objectB.position + _moveDirection);
-
-        Plane planeA = new Plane(_objectA.position,
-                                 _objectA.position + _objectA.right,
-                                 _objectA.position + _objectA.forward);
-        Plane planeB = new Plane(_objectB.position,
-                                 _objectB.position + _objectB.right,
-                                 _objectB.position + _objectB.forward);
-
-        _joint = new SliderJoint(lineA, lineB,
-                                 planeA, planeB,
-                                 _minPosition, _maxPosition);
+        if (Application.isPlaying) return;  // 여기로 이동
+        InitializeJoint();
     }
 
     /**
@@ -173,6 +139,43 @@ public class SliderJointComponent : MonoBehaviour
         }
 
         return rb;
+    }
+
+    /**
+    * @brief  Awake 및 OnValidate 에서 공통으로 호출되는 조인트 초기화 메서드.
+    *         이동축 Line 과 기준 Plane 을 생성하고 SliderJoint 인스턴스를 초기화한다.
+    */
+    private void InitializeJoint()
+    {
+        if (_objectA == null || _objectB == null) return;
+
+        // 오브젝트 A·B 의 Transform 에서 이동축 Line 생성
+        Line lineA = new Line(_objectA.position,
+                              _objectA.position + _moveDirection);
+        Line lineB = new Line(_objectB.position,
+                              _objectB.position + _moveDirection);
+
+        // 오브젝트 A·B 의 Transform 에서 기준 Plane 생성
+        // transform.right, transform.forward 로 면의 세 점 정의
+        Plane planeA = new Plane(_objectA.position,
+                                 _objectA.position + _objectA.right,
+                                 _objectA.position + _objectA.forward);
+        Plane planeB = new Plane(_objectB.position,
+                                 _objectB.position + _objectB.right,
+                                 _objectB.position + _objectB.forward);
+
+        // B 의 초기 위치를 이동축에 투영하여 초기 거리 계산
+        float initialDistance = SliderJoint.GetProjectedDistance(
+            lineA, _objectB.position, _objectA.position, _moveDirection);
+
+        // min/max 를 B 의 초기 위치 기준 offset 으로 적용
+        _actualMinPosition = initialDistance + _minPosition;
+        _actualMaxPosition = initialDistance + _maxPosition;
+
+        // SliderJoint.cs 인스턴스 생성
+        _joint = new SliderJoint(lineA, lineB,
+                                 planeA, planeB,
+                                 _actualMinPosition, _actualMaxPosition);
     }
 
     /**
