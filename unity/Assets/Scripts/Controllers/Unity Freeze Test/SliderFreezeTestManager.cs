@@ -12,7 +12,7 @@ using UnityEngine;
 public class SliderFreezeTestManager : MonoBehaviour
 {
     [SerializeField] private Transform _objectB;         // 테스트 대상 오브젝트 B 연결
-    [SerializeField] private float _rotateSpeed = 0.5f;  // 마우스 드래그 감도
+    [SerializeField] private float _sliderSpeed = 0.5f;  // 마우스 드래그 감도
 
     private Rigidbody _rigidbodyB;  // 오브젝트 B 리지드바디
 
@@ -35,7 +35,7 @@ public class SliderFreezeTestManager : MonoBehaviour
      *         마우스 스크린 좌표를 가져와 오브젝트 B 의 깊이값(z)을 적용한 후
      *         3D 월드 좌표로 변환하여 Rigidbody.MovePosition() 으로 이동시킨다.
      */
-    void Update()
+    private void Update()
     {
         // Rigidbody 가 없으면 이하 코드 실행하지 않는다.
         if (_rigidbodyB == null) return;
@@ -46,7 +46,9 @@ public class SliderFreezeTestManager : MonoBehaviour
             Vector3 mousePos = Input.mousePosition;
             mousePos.z = Camera.main.WorldToScreenPoint(_rigidbodyB.transform.position).z;
             Vector3 worldPos = Camera.main.ScreenToWorldPoint(mousePos);
-            _rigidbodyB.MovePosition(worldPos);
+
+            Vector3 delta = (worldPos - _rigidbodyB.position) * _sliderSpeed;
+            _rigidbodyB.MovePosition(_rigidbodyB.position + delta);
         }
 
     }

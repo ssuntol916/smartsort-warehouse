@@ -17,15 +17,18 @@ public class RevoluteJointComponent : MonoBehaviour
     [SerializeField] private float _maxAngle = 90f;                      // 최대 회전 각도 (degree)
     [SerializeField] private Vector3 _rotationAxis = Vector3.right;      // 회전축
 
-    private RevoluteJoint _joint;           // RevoluteJoint.cs 인스턴스
-    private Rigidbody _rigidbodyA;          // 오브젝트 A 리지드바디
-    private Rigidbody _rigidbodyB;          // 오브젝트 B 리지드바디
+    private RevoluteJoint _joint;                    // RevoluteJoint.cs 인스턴스
+    private Rigidbody _rigidbodyA;                   // 오브젝트 A 리지드바디
+    private Rigidbody _rigidbodyB;                   // 오브젝트 B 리지드바디
+    private RigidbodyConstraints _freezeConstraint;  // 이동 방향 기준 프리즈 조건 (캐시)
 
-    private bool _wasConstrained;           // 이전 프레임 구속 상태
-    private Vector3 _initialDirection;      // 초기 기준 방향 (각도 측정용)
-    private Quaternion _initialRotation;    // 초기 회전값 (최종 회전 적용용)
+    private bool _wasConstrained;                    // 이전 프레임 구속 상태
+    private Vector3 _initialDirection;               // 초기 기준 방향 (각도 측정용)
+    private Quaternion _initialRotation;             // 초기 회전값 (최종 회전 적용용)
+    private const float ApplyTolerance = 0.001f;     // 물리 적용 판별 허용 오차
 
     public float CurrentAngle => _joint?.CurrentAngle ?? 0f;   // 현재 회전 각도
+    public Vector3 RotationAxis => _rotationAxis;
 
     /**
      * @brief  오브젝트 A·B 의 Transform 을 기반으로 회전축 Line 을 생성하고
@@ -38,6 +41,8 @@ public class RevoluteJointComponent : MonoBehaviour
         // 오브젝트 리지드바디 생성 및 고정 오브젝트(Kinematic) 설정 확인
         _rigidbodyA = InitializeRigidbody(_objectA, true);
         _rigidbodyB = InitializeRigidbody(_objectB, false);
+
+        _freezeConstraint = GetFreezeConstraintByDirection();
 
         // 절대적인 World X축이 아닌, _objectA가 회전한 만큼 _rotationAxis도 같이 회전시켜서 로컬 축으로 만듦
         Vector3 localAxisA = _objectA.rotation * _rotationAxis;
@@ -54,9 +59,15 @@ public class RevoluteJointComponent : MonoBehaviour
 
         _initialRotation = _objectB.rotation;
 
-        // 회전축이 right(X)이므로, 측정용 방향 벡터는 직교하는 up(Y) 또는 forward(Z)를 사용합니다.
-        // 여기서는 up(Y)을 사용하겠습니다.
-        _initialDirection = _objectB.up;
+        // 회전축과 수직인 벡터를 구해서 초기 기준 방향으로 저장
+        Vector3 perpendicular = Vector3.Cross(_rotationAxis, Vector3.forward);
+
+        if (perpendicular.magnitude < ApplyTolerance)
+        {
+            perpendicular = Vector3.Cross(_rotationAxis, Vector3.right);
+        }
+
+        _initialDirection = _objectB.rotation * perpendicular;
     }
 
     /**
@@ -80,17 +91,29 @@ public class RevoluteJointComponent : MonoBehaviour
         // 구속 조건이 참이면 프리즈, 아니면 해제
         if (isConstrained)
         {
-            _rigidbodyB.constraints = GetFreezeConstraintByDirection();
+            _rigidbodyB.constraints = _freezeConstraint;
 
-            // 1. 오브젝트 B의 (초기 방향)과 (현재 방향)을 비교하여 회전축 기준 각도를 구하고,
-            // 2. min/max 범위 안에서만 회전하도록 클램프 처리된 최종 회전값(Quaternion)을 얻어옵니다.
-            Vector3 localAxis = _objectA.rotation * _rotationAxis; // <- 현재 기준이 되는 로컬 회전축 계산
+            // 절대적인 World 축이 아닌, _objectA가 회전한 만큼 _rotationAxis도 같이 회전시켜서 로컬 축으로 만듦
+            Vector3 localAxis = _objectA.rotation * _rotationAxis;
 
-            // _joint.CurrentAngle은 매니저에서 마우스 드래그로 바꾼 값임
-            Quaternion clampedRot = Quaternion.AngleAxis(_joint.CurrentAngle, localAxis) * _initialRotation;
+            // 회전축과 수직인 벡터를 구한다
+            Vector3 perpendicular = Vector3.Cross(_rotationAxis, Vector3.forward);
+
+            // 회전축과 forward가 평행할 때 forward 대신 right 로 대체
+            if (perpendicular.magnitude < ApplyTolerance)
+            {
+                perpendicular = Vector3.Cross(_rotationAxis, Vector3.right);
+            }
+
+            // 오브젝트 B의 현재 방향 벡터를 구한다
+            Vector3 currentDirection = _objectB.rotation * perpendicular;
+
+            // 현재 회전값을 읽어서 min/max 범위 안으로 클램프된 회전값을 구한다
+            Quaternion clampedRot = _joint.GetClampedRotation(
+                _initialDirection, currentDirection, localAxis, _initialRotation);
 
             // 현재 회전값과 클램프된 회전값에 차이가 있다면 회전을 적용합니다.
-            if (Quaternion.Angle(_objectB.rotation, clampedRot) > 0.001f)
+            if (Quaternion.Angle(_objectB.rotation, clampedRot) > ApplyTolerance)
             {
                 _rigidbodyB.MoveRotation(clampedRot);
             }

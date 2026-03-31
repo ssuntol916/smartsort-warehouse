@@ -24,6 +24,7 @@ public class SliderJointComponent : MonoBehaviour
     private bool _wasConstrained;                    // 이전 프레임 구속 상태
     private float _actualMinPosition;                // B 초기 위치 기준 실제 최소 이동 범위
     private float _actualMaxPosition;                // B 초기 위치 기준 실제 최대 이동 범위
+    private const float ApplyTolerance = 0.001f;     // 물리 적용 판별 허용 오차
 
     public float CurrentPosition => _joint?.CurrentPosition ?? 0f;   // 현재 슬라이더 위치
 
@@ -42,14 +43,13 @@ public class SliderJointComponent : MonoBehaviour
         
         _freezeConstraint = GetFreezeConstraintByDirection();
 
-        Debug.Log($"SliderJointComponent: 이동축이 {_moveDirection} 으로 설정되었습니다. \nInspector 에서도 설정된 이동축 확인이 가능합니다.");
-
         // 오브젝트 리지드바디 생성 및 고정 오브젝트(Kinematic) 설정 확인
         _rigidbodyA = InitializeRigidbody(_objectA, true);
         _rigidbodyB = InitializeRigidbody(_objectB, false);
 
         InitializeJoint();
 
+        Debug.Log($"SliderJointComponent: 이동축이 {_moveDirection} 으로 설정되었습니다. \nInspector 에서도 설정된 이동축 확인이 가능합니다.");
     }
 
     //TODO: 추후에 다시 확인 - 프리즈 대신 '구속 조건이 풀리면 → 다시 구속 위치로 이동' 구현 예정
@@ -81,7 +81,7 @@ public class SliderJointComponent : MonoBehaviour
             // min/max 범위 안에서만 움직이도록 클램프 처리
             Vector3 clampedPos = _joint.GetClampedPosition(_objectB.position, _objectA.position, _moveDirection);
 
-            if (Vector3.Distance(_objectB.position, clampedPos) > 0.001f)
+            if (Vector3.Distance(_objectB.position, clampedPos) > ApplyTolerance)
             {
                 _rigidbodyB.MovePosition(clampedPos);
             }

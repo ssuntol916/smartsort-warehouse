@@ -1,58 +1,64 @@
 // ============================================================
-// 파일명  : FreezeTestManager.cs
-// 역할    : 회전 조인트 테스트용 매니저 (마우스 왼쪽 드래그 상하 회전)
+// 파일명  : RevoluteFreezeTestManager.cs
+// 역할    : 구속 조건 테스트용 오브젝트 B 드래그 매니저
+//           마우스 드래그로 오브젝트 B에 회전을 주어 구속 조건 및 클램프를 테스트한다.
 // 작성자  : 이현화
-// 작성일  : 2026-03-30
+// 작성일  : 2026-03-31
+// 수정이력: 
 // ============================================================
+
 using UnityEngine;
 
-public class FreezeTestManager : MonoBehaviour
+public class RevoluteFreezeTestManager : MonoBehaviour
 {
-    [SerializeField] private Transform _objectB;         // 테스트 대상 오브젝트 B 연결
-    [SerializeField] private float _rotateSpeed = 0.5f;   // 마우스 드래그 감도
+    [SerializeField] private Transform _objectB;                        // 테스트 대상 오브젝트 B 연결
+    [SerializeField] private RevoluteJointComponent _jointComponent;    // 누적 각도 관리 컴포넌트
+    [SerializeField] private float _rotateSpeed = 5f;                   // 마우스 드래그 감도
+    [SerializeField] private bool _useMouseY = true;                    // 마우스 입력 방향 (true: 위아래, false: 좌우)
 
-    private RevoluteJointComponent _jointComponent;      // 조인트 컴포넌트 (내부 연결)
-    private float _currentTestAngle = 0f;                // 테스트용 현재 각도 저장
+    private Rigidbody _rigidbodyB;  // 오브젝트 B 리지드바디
 
-    private void Awake()
+    private void Start()
     {
-        // _objectB가 할당되어 있다면 해당 오브젝트에서 컴포넌트를 가져옴
-        if (_objectB != null)
-        {
-            _jointComponent = _objectB.GetComponent<RevoluteJointComponent>();
+        // 오브젝트 B 의 Rigidbody 컴포넌트를 가져온다.
+        _rigidbodyB = _objectB.GetComponent<Rigidbody>();
 
-            if (_jointComponent == null)
-            {
-                Debug.LogError($"{_objectB.name}에 RevoluteJointComponent가 없습니다.");
-            }
+        // Rigidbody 가 없으면 경고 출력 후 종료
+        if (_rigidbodyB == null)
+        {
+            Debug.LogWarning("RevoluteFreezeTestManager: 움직일 오브젝트(Object B)가 연결되지 않았습니다. \nInspector 에서 오브젝트를 연결해주세요.");
+            return;
         }
-    }
-        private void Start()
-    {
-        if (_jointComponent != null)
-            _currentTestAngle = _jointComponent.CurrentAngle;
+
     }
 
-    void Update()
+    /**
+     * @brief  마우스 오른쪽 버튼을 누르고 드래그하면 오브젝트 B 를 회전시킨다.
+     *         마우스 입력 방향(Mouse X 또는 Mouse Y)에 감도를 곱해 회전 각도 변화량을 구하고
+     *         Rigidbody.MoveRotation() 으로 오브젝트 B 를 직접 회전시킨다.
+     */
+    private void Update()
     {
-        // 오브젝트나 조인트 컴포넌트가 없으면 리턴
-        if (_objectB == null || _jointComponent == null) return;
+        // Rigidbody 가 없으면 이하 코드 실행하지 않는다.
+        if (_rigidbodyB == null) return;
 
-        // 마우스 왼쪽 버튼(0)을 누르고 있을 때
-        if (Input.GetMouseButton(0))
+        // JointComponent 가 없으면 이하 코드 실행하지 않는다.
+        if (_jointComponent == null)
         {
-            // 마우스의 상하 움직임(Y)만 가져옵니다.
-            float mouseY = Input.GetAxis("Mouse Y");
+            Debug.LogWarning("RevoluteFreezeTestManager: JointComponent 가 연결되지 않았습니다. \nInspector 에서 오브젝트를 연결해주세요.");
+            return;
+        }
 
-            // 마우스 위아래 움직임에 따라 각도를 가감합니다.
-            // 위로 올리면(mouseY > 0) 각도 증가, 아래로 내리면 감소
-            _currentTestAngle += mouseY * _rotateSpeed * 100f;
+        if (Input.GetMouseButton(1))
+        {
+            float delta = Input.GetAxis(_useMouseY ? "Mouse Y" : "Mouse X") * _rotateSpeed;  // 마우스 입력 방향에 따라 회전 변화량 계산
 
-            // 조인트 컴포넌트에 계산된 각도를 전달합니다.
-            _jointComponent.SetAngle(_currentTestAngle);
+            // 회전축 가져오기
+            Vector3 rotationAxis = _jointComponent.RotationAxis;
 
-            // 실제 조인트에서 제한(Clamp)된 각도를 다시 가져와 동기화합니다.
-            _currentTestAngle = _jointComponent.CurrentAngle;
+            // delta만큼 회전시키기
+            Quaternion rotation = Quaternion.AngleAxis(delta, rotationAxis);
+            _rigidbodyB.MoveRotation(_rigidbodyB.rotation * rotation);
         }
     }
 }
