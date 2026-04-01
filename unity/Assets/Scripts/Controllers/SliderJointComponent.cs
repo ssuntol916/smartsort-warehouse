@@ -106,11 +106,20 @@ public class SliderJointComponent : MonoBehaviour
 
     /**
     * @brief  Inspector 에서 값 변경 시 Line·Plane 을 재생성하고 SliderJoint 를 재초기화한다.
-    *         ※ Play 모드에서는 실행되지 않는다.
+    *         Play 모드에서 _objectA·B 가 바뀌면 Rigidbody 참조·프리즈 조건도 갱신한다.
      */
     private void OnValidate()
     {
-        if (Application.isPlaying) return;  // 여기로 이동
+        if (_objectA == null || _objectB == null) return;
+
+        // Play 모드: ObjectA·B 변경 시 Rigidbody 참조 및 프리즈 조건 갱신
+        if (Application.isPlaying)
+        {
+            _rigidbodyA = _objectA.GetComponent<Rigidbody>();
+            _rigidbodyB = _objectB.GetComponent<Rigidbody>();
+            _freezeConstraint = GetFreezeConstraintByDirection();
+        }
+
         InitializeJoint();
     }
 
