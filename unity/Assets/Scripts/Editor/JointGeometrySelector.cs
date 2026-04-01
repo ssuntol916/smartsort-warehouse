@@ -37,10 +37,10 @@ public class JointGeometrySelector
     private MeshFilter[] _allMeshFilters;
 
     // 면(Plane) 선택 상태
-    private List<int>   _hoveredFaceTriangles;      // 커서 올려진 면
-    private MeshFilter  _hoveredFaceMeshFilter;
-    private List<int>   _confirmedFaceTrianglesA;    // 확정된 면
-    private MeshFilter  _confirmedFaceMeshFilterA;
+    private List<int>   _hoveredFaceTriangles;      // 커서 올려진 면, 삼각형 인덱스
+    private MeshFilter  _hoveredFaceMeshFilter;     // 커서 올려진 면, 메쉬필터
+    private List<int>   _confirmedFaceTrianglesA;       // 확정된 면, 삼각형 인덱스
+    private MeshFilter  _confirmedFaceMeshFilterA;      // 확정된 면, 메쉬필터
 
     // 엣지(Line) 선택 상태
     private List<(Vector3, Vector3)>  _currentBoundaryEdges;
@@ -241,7 +241,7 @@ public class JointGeometrySelector
     /** 엣지 호버 중 커서 업데이트 */
     private void UpdateEdgeHover(Ray ray, Vector2 mousePosition, Camera camera)
     {
-        // 면 호버 → 경계 엣지 계산
+        // 면 호버 -> 경계 엣지 계산
         if (MeshGeometryPicker.TryRaycastTriangle(
                 ray, _allMeshFilters,
                 out MeshFilter hitFilter, out int triIdx))
