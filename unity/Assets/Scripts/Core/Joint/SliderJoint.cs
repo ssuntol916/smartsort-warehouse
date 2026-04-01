@@ -2,7 +2,7 @@
 // 파일명  : SliderJoint.cs
 // 역할    : 슬라이더 조인트 클래스
 // 작성자  : 이현화
-// 작성일  : 2026-03-31
+// 작성일  : 2026-04-01
 // 수정이력: 
 // ============================================================
 
@@ -79,7 +79,9 @@ public class SliderJoint : Joint
 
     /**
      * @brief  오브젝트 B 의 현재 위치를 이동축에 투영하여 클램프된 위치를 반환한다.
+     *         GetProjectedDistance() 메서드로 이동 방향 거리를 계산하고,
      *         이동 방향 축 성분만 클램프하고 나머지 축(Y, Z 등)은 B 의 현재 위치를 유지한다.
+     *         내부적으로 Mathf.Clamp() 로 _currentPosition 상태값을 실시간으로 갱신한다.
      * @param  currentBPosition    오브젝트 B 의 현재 위치
      * @param  originPosition      이동축 시작점 (오브젝트 A 의 위치)
      * @param  moveDirection       이동 방향 벡터
@@ -87,31 +89,32 @@ public class SliderJoint : Joint
      */
     public Vector3 GetClampedPosition(Vector3 currentBPosition, Vector3 originPosition, Vector3 moveDirection)
     {
+        // GetProjectedDistance 메서드를 활용하여 이동축 방향의 부호 있는 거리 계산 (A점 기준)
         float distance = GetProjectedDistance(_lineA, currentBPosition, originPosition, moveDirection);
-        SetPosition(distance);
 
-        // 이동 방향(예: X축) 기준으로 클램프된 목표 위치 계산
-        // 이 시점에서 이동 방향 외 축(Y, Z)은 A 의 위치 기준으로 계산되어 있음
-        Vector3 projectedOrigin = originPosition + moveDirection * _currentPosition;
+        // 범위를 제한하고 내부 상태값 갱신
+        _currentPosition = Mathf.Clamp(distance, _minPosition, _maxPosition);
 
-        // 목표 위치와 B 현재 위치의 차이 계산
-        Vector3 diff = projectedOrigin - currentBPosition;
+        // 갱신된 클램프 거리를 기준으로 목표 월드 좌표 계산
+        Vector3 targetWorldPos = originPosition + moveDirection * _currentPosition;
 
-        // 차이 벡터에서 이동 방향 성분만 추출
-        // → 이동 방향 외 축(Y, Z)의 차이는 제거되고 이동 방향 축 차이만 남음
-        // → B 현재 위치에 이동 방향 성분만 더하면 Y, Z 는 자연스럽게 유지됨
+        // 이동 방향 외의 축(Y, Z)은 현재 B의 위치를 유지하도록 보정하여 반환
+        // (목표 위치와 현재 위치의 차이 벡터에서 이동 방향 성분만 추출하여 현재 위치에 더함)
+        Vector3 diff = targetWorldPos - currentBPosition;
         return currentBPosition + Vector3.Project(diff, moveDirection);
     }
 
     //TODO: 추후에 다시 확인 - 구속된 오브젝트끼리 위치가 다르면 구속된 형태로 변경되게끔 하는 작업 이후
     /**
-    * @brief  슬라이더 구속 조건을 등록한다.
+    * @brief  슬라이더 구속 조건을 확인하고 상태를 갱신한다.
     *         아래 두 조건을 확인하여 구속 상태를 저장한다.
     *         ① lineA 와 lineB 가 평행 또는 일치 → _isLineConstrained 에 저장
     *         ② planeA 와 planeB 가 일치 → _isPlaneConstrained 에 저장
     */
     public override bool ApplyConstraint()
     {
+        if (_lineA == null || _lineB == null || _planeA == null || _planeB == null) return false;
+
         _isLineConstrained = _lineA.IsCoincident(_lineB) || _lineA.IsParallel(_lineB);
         _isPlaneConstrained = _planeA.IsCoincident(_planeB);
 
@@ -128,6 +131,8 @@ public class SliderJoint : Joint
      */
     public override bool IsValid()
     {
+        if (_lineA == null || _lineB == null || _planeA == null || _planeB == null) return false;
+
         bool isValid = true;
 
         if (!_lineA.IsCoincident(_lineB) && !_lineA.IsParallel(_lineB))

@@ -17,7 +17,7 @@ public class RevoluteJointComponent : JointComponent
     private RevoluteJoint _joint;              // RevoluteJoint.cs 인스턴스
     private Vector3 _initialDirection;         // 초기 기준 방향 (각도 측정용)
     private Quaternion _initialRotation;       // 초기 회전값 (최종 회전 적용용)
-    private Vector3 _objectBRotationAxis;      // 오브젝트 B 기준 회전축 (런타임 계산용)
+    private Vector3 _objectBRotationAxis;      // 오브젝트 B 기준 회전축
 
     public float CurrentAngle => _joint?.CurrentAngle ?? 0f;    // 현재 회전 각도
     public Vector3 ObjectBRotationAxis => _objectBRotationAxis;     // 오브젝트 B 기준 회전축
@@ -27,8 +27,10 @@ public class RevoluteJointComponent : JointComponent
      * @brief  회전축 Line 을 생성하고 RevoluteJoint 를 초기화한다.
      *         초기 기준 방향(_initialDirection) 과 초기 회전값(_initialRotation) 을 저장한다.
      */
-    protected override void OnAwake()
+    protected override void InitializeChild()
     {
+        _objectBRotationAxis = _rotationAxis; // 초기 축 설정
+
         // 오브젝트 A·B 의 Transform 에서 회전축 Line 생성
         Line lineA = new Line(_objectA.position,
                               _objectA.position + _rotationAxis);
@@ -66,17 +68,11 @@ public class RevoluteJointComponent : JointComponent
     {
         if (_joint == null) return false;
 
-        // IsValid() 호출 전에 lineB 먼저 갱신
-        Line lineB = new Line(_objectB.position,
-                              _objectB.position + _rotationAxis);
-        _joint.UpdateLineB(lineB);
-
         return _joint.IsValid();
     }
 
     /**
      * @brief  RevoluteJoint 구속 조건 적용.
-     *         lineB 갱신은 IsJointValid() 에서 처리하므로 여기서는 구속 조건만 확인한다.
      * @return bool  구속 중이면 true
      */
     protected override bool ApplyJointConstraint()
@@ -118,12 +114,26 @@ public class RevoluteJointComponent : JointComponent
     /**
      * @brief  외부에서 회전 각도를 설정한다.
      *         ShuttleController.cs 에서 임펠러 각도 제어 시 호출한다.
-     *         RevoluteJoint.SetAngle() 에 위임한다.
+     *         Rigidbody.MoveRotation()과 Transform.rotation을 즉시 동기화하여
+     *         Update() → OnConstrained() 실행 시 타이밍 충돌을 방지하고
+     *         프레임 지연 없이 즉각적인 회전 제어를 수행한다.
      * @param  angle    설정할 회전 각도 (degree)
      */
     public void SetAngle(float angle)
     {
-        _joint?.SetAngle(angle);
+        if (_joint == null || _rigidbodyB == null) return;
+
+        // 로직 클래스의 상태값을 먼저 업데이트 (내부에서 min/max 클램프 처리됨)
+        _joint.SetAngle(angle);
+
+        // 클램프된 결과값(_joint.CurrentAngle)을 바탕으로 목표 회전값 계산
+        Quaternion targetRotation = Quaternion.AngleAxis(_joint.CurrentAngle, _objectBRotationAxis) * _initialRotation;
+
+        // 물리 회전 명령 및 Transform 즉시 동기화
+        // Transform을 즉시 반영하여 다음 Update/FixedUpdate에서
+        // OnConstrained()가 이전 회전을 기준으로 재계산하는 문제를 방지
+        _rigidbodyB.MoveRotation(targetRotation);
+        _objectB.rotation = targetRotation;
     }
 
     /**

@@ -3,7 +3,7 @@
 // 역할    : SliderJointComponent 와 RevoluteJointComponent 의 공통 기반 추상 클래스
 //           Rigidbody 초기화, 구속 상태 로그, Update 공통 흐름을 담당한다.
 // 작성자  : 이현화
-// 작성일  : 2026-03-31
+// 작성일  : 2026-04-01
 // 수정이력: 
 // ============================================================
 
@@ -29,6 +29,12 @@ public abstract class JointComponent : MonoBehaviour
      */
     protected virtual void Awake()
     {
+        if (_objectA == null || _objectB == null)
+        {
+            Debug.LogError($"{GetType().Name}: 필수 오브젝트(A 또는 B)가 할당되지 않았습니다.");
+            enabled = false;  // Update 호출 중단 (NullReferenceException 방지)
+            return;
+        }
         _rigidbodyA = InitializeRigidbody(_objectA, true);
         _rigidbodyB = InitializeRigidbody(_objectB, false);
 
@@ -36,7 +42,7 @@ public abstract class JointComponent : MonoBehaviour
         _rigidbodyB.useGravity = false;
 
         _freezeConstraint = GetFreezeConstraintByDirection();
-        OnAwake();
+        InitializeChild();
     }
 
     // TODO: 추후에 다시 확인 - TestManager 와의 실행 순서 충돌 문제 해결 후 FixedUpdate 로 변경 예정
@@ -87,7 +93,7 @@ public abstract class JointComponent : MonoBehaviour
      * @brief  자식 클래스 전용 초기화.
      *         조인트 인스턴스 생성 및 자식 전용 필드 초기화를 여기서 수행한다.
      */
-    protected abstract void OnAwake();
+    protected abstract void InitializeChild();
 
     /**
     * @brief  Inspector 에서 값 변경 시 자식 클래스 전용 재초기화.

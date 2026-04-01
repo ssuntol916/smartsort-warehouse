@@ -58,16 +58,6 @@ public class RevoluteJoint : Joint
     }
 
     /**
-    * @brief  오브젝트 B 의 현재 위치를 기반으로 lineB 를 갱신한다.
-    *         매 프레임 오브젝트 B 가 움직일 수 있으므로 Update 시점에 호출한다.
-    * @param  lineB    갱신할 오브젝트 B 의 회전축 Line
-    */
-    public void UpdateLineB(Line lineB)
-    {
-        _lineB = lineB;
-    }
-
-    /**
     * @brief  회전축을 기준으로 오브젝트 B 의 현재 방향과 초기 기준 방향 사이의 부호 있는 각도를 반환한다.
     * @param  fromDirection  초기 기준 방향 벡터 (오브젝트 B 의 처음 방향)
     * @param  toDirection    현재 방향 벡터 (오브젝트 B 의 현재 방향)
@@ -103,7 +93,8 @@ public class RevoluteJoint : Joint
     }
 
     /**
-     * @brief  회전 구속 조건을 등록한다.
+     * @brief  회전 구속 조건을 확인하고 상태를 갱신한다.
+     *         현재는 구속 조건 충족 여부만 검사하며, 실제 회전 보정은 OnConstrained() 에서 수행된다.
      *         아래 조건을 확인하여 구속 상태를 저장한다.
      *         ① lineA 와 lineB 가 일치 → _isLineConstrained 에 저장
      * @return bool  구속 상태(_isLineConstrained) 반환

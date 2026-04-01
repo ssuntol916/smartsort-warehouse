@@ -2,7 +2,7 @@
 // 파일명  : SliderJointComponent.cs
 // 역할    : SliderJoint 를 씬 오브젝트에 연결하는 MonoBehaviour 컴포넌트
 // 작성자  : 이현화
-// 작성일  : 2026-03-31
+// 작성일  : 2026-04-01
 // 수정이력: 
 // ============================================================
 
@@ -22,7 +22,7 @@ public class SliderJointComponent : JointComponent
     /**
      * @brief  이동 방향 벡터 정규화 후 SliderJoint 를 초기화한다.
      */
-    protected override void OnAwake()
+    protected override void InitializeChild()
     {
         // 이동 방향 벡터 정규화 (GetProjectedDistance 거리 계산 및 위치 계산 정확도 보장)
         _moveDirection = _moveDirection.normalized;
@@ -38,7 +38,9 @@ public class SliderJointComponent : JointComponent
      */
     protected override bool IsJointValid()
     {
-        return _joint != null && _joint.IsValid();
+        if (_joint == null) return false;
+
+        return _joint.IsValid();
     }
 
     /**
@@ -53,29 +55,52 @@ public class SliderJointComponent : JointComponent
     //TODO: 추후에 다시 확인 - 프리즈 대신 '구속 조건이 풀리면 → 다시 구속 위치로 이동' 구현 예정
     //      현재는 구속 조건 확인을 위한 임시 프리즈 처리
     /**
-     * @brief  구속 상태일 때 오브젝트 B 의 위치를 클램프하여 이동시킨다.
+     * @brief  구속 상태일 때 슬라이더 위치를 제한한다.
+     *         범위를 벗어난 경우에만 클램프하여 강제 이동시키고,
+     *         범위 내에 있을 때는 프리즈된 축 내에서 자유롭게 움직이도록 로직 상태만 동기화한다.
      */
     protected override void OnConstrained()
     {
-        // 오브젝트 B 의 현재 위치를 lineA 에 투영하여 거리를 계산하고
-        // min/max 범위 안에서만 움직이도록 클램프 처리
-        Vector3 clampedPos = _joint.GetClampedPosition(_objectB.position, _objectA.position, _moveDirection);
+        // 현재 물리적 위치에서의 거리를 로컬로 계산
+        float currentPos = Vector3.Dot(_objectB.position - _objectA.position, _moveDirection);
 
-        if (Vector3.Distance(_objectB.position, clampedPos) > ApplyTolerance)
+        // 범위를 벗어났을 때만 클램프 적용
+        // 범위 내에 있을 때는 _currentPosition을 직접 측정값으로 동기화하여 떨림 방지
+        if (currentPos < _minPosition || currentPos > _maxPosition)
         {
+            Vector3 clampedPos = _joint.GetClampedPosition(_objectB.position, _objectA.position, _moveDirection);
             _rigidbodyB.MovePosition(clampedPos);
+        }
+        else
+        {
+            // 범위 내에 있을 때는 단순히 현재 위치를 상태값에 반영
+            _joint.SetPosition(currentPos);
         }
     }
 
     /**
      * @brief  외부에서 슬라이더 위치를 설정한다.
      *         ShuttleController.cs 에서 X·Y 바퀴 위치 제어 시 호출한다.
-     *         SliderJoint.SetPosition() 에 위임한다.
+     *         Rigidbody.MovePosition()과 Transform.position을 즉시 동기화하여
+     *         Update() → OnConstrained() 실행 시 타이밍 충돌을 방지하고
+     *         프레임 지연 없이 즉각적인 위치 제어를 수행한다.
      * @param  position    설정할 슬라이더 위치 (mm)
      */
     public void SetPosition(float position)
     {
-        _joint?.SetPosition(position);
+        if (_joint == null || _rigidbodyB == null) return;
+
+        // 로직 클래스의 상태값을 먼저 업데이트 (내부에서 min/max 클램프 처리됨)
+        _joint.SetPosition(position);
+
+        // 클램프된 결과값(_joint.CurrentPosition)을 바탕으로 목표 월드 좌표 계산
+        Vector3 targetWorldPos = _objectA.position + (_moveDirection.normalized * _joint.CurrentPosition);
+
+        // 물리 이동 명령 및 Transform 즉시 동기화
+        // Transform을 즉시 반영하여 다음 Update/FixedUpdate에서
+        // OnConstrained()가 이전 위치를 기준으로 재계산하는 문제를 방지
+        _rigidbodyB.MovePosition(targetWorldPos);
+        _objectB.position = targetWorldPos;
     }
 
     /**
@@ -102,7 +127,7 @@ public class SliderJointComponent : JointComponent
                               _objectB.position + _moveDirection);
 
         // 오브젝트 A·B 의 Transform 에서 기준 Plane 생성
-        // transform.right, transform.forward 로 면의 세 점 정의
+        // _objectA.right, _objectA.forward 로 면의 세 점 정의
         Plane planeA = new Plane(_objectA.position,
                                  _objectA.position + _objectA.right,
                                  _objectA.position + _objectA.forward);

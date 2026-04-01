@@ -593,54 +593,6 @@ public class RevoluteJointTest
 
     #endregion
 
-    #region UpdateLineB 테스트
-
-    /**
-     * @brief  LineB 갱신 후 유효성 변경 테스트 - 무효한 상태에서 유효한 상태로 변경되는지 검증한다.
-     */
-    [Test]
-    public void UpdateLineB_FromInvalidToValid_BecomesValid()
-    {
-        // Arrange
-        Line lineA = new Line(Vector3.zero, Vector3.right);
-        Line lineB = new Line(new Vector3(0, 5, 0), new Vector3(1, 5, 0));  // 일치하지 않음
-        RevoluteJoint joint = new RevoluteJoint(lineA, lineB, -90f, 90f);
-
-        // 초기 상태 확인
-        Assert.IsFalse(joint.IsValid());
-
-        // Act - lineB 를 일치하는 위치로 갱신
-        Line newLineB = new Line(Vector3.zero, Vector3.right);
-        joint.UpdateLineB(newLineB);
-
-        // Assert
-        Assert.IsTrue(joint.IsValid());
-    }
-
-    /**
-     * @brief  LineB 갱신 후 유효성 변경 테스트 - 유효한 상태에서 무효한 상태로 변경되는지 검증한다.
-     */
-    [Test]
-    public void UpdateLineB_FromValidToInvalid_BecomesInvalid()
-    {
-        // Arrange
-        Line lineA = new Line(Vector3.zero, Vector3.right);
-        Line lineB = new Line(Vector3.zero, Vector3.right);  // 일치함
-        RevoluteJoint joint = new RevoluteJoint(lineA, lineB, -90f, 90f);
-
-        // 초기 상태 확인
-        Assert.IsTrue(joint.IsValid());
-
-        // Act - lineB 를 일치하지 않는 위치로 갱신
-        Line newLineB = new Line(new Vector3(0, 5, 0), new Vector3(1, 5, 0));
-        joint.UpdateLineB(newLineB);
-
-        // Assert
-        Assert.IsFalse(joint.IsValid());
-    }
-
-    #endregion
-
     #region Axis 프로퍼티 테스트
 
     /**
