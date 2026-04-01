@@ -56,7 +56,7 @@ public abstract class Joint
      * @brief  구속 조건을 적용한다.
      *         파생 클래스에서 구현.
      */
-    public abstract void ApplyConstraint();
+    public abstract bool ApplyConstraint();
 
     /**
      * @brief  조인트가 유효한 상태인지 검증한다.
