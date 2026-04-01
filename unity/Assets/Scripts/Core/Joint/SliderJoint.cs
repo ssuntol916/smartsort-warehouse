@@ -2,7 +2,7 @@
 // 파일명  : SliderJoint.cs
 // 역할    : 슬라이더 조인트 클래스
 // 작성자  : 이현화
-// 작성일  : 2026-03-30
+// 작성일  : 2026-03-31
 // 수정이력: 
 // ============================================================
 
@@ -16,15 +16,15 @@ public class SliderJoint : Joint
     private Plane _planeB;              // 오브젝트 B 의 기준 면 (회전 방지)
 
     private float _currentPosition;     // 현재 슬라이더 위치 (mm)
-    private float _minPosition;         // 최소 이동 범위 (mm)
-    private float _maxPosition;         // 최대 이동 범위 (mm)
+    private float _minPosition;         // 최소 이동 범위 - 오브젝트 A 위치 기준 절대값 (mm)
+    private float _maxPosition;         // 최대 이동 범위 - 오브젝트 A 위치 기준 절대값 (mm)
 
     private bool _isLineConstrained;    // lineA ↔ lineB 구속 등록됐는지
     private bool _isPlaneConstrained;   // planeA ↔ planeB 구속 등록됐는지
 
     public float CurrentPosition => _currentPosition;      // 현재 슬라이더 위치
-    public float MinPosition => _minPosition;              // 최소 이동 범위
-    public float MaxPosition => _maxPosition;              // 최대 이동 범위
+    public float MinPosition => _minPosition;              // 최소 이동 범위 - 오브젝트 A 위치 기준 절대값 (mm)
+    public float MaxPosition => _maxPosition;              // 최대 이동 범위 - 오브젝트 A 위치 기준 절대값 (mm)
     public bool IsLineConstrained => _isLineConstrained;   // Line 구속 등록 여부
     public bool IsPlaneConstrained => _isPlaneConstrained; // Plane 구속 등록 여부
 
@@ -36,8 +36,8 @@ public class SliderJoint : Joint
      * @param  lineB         오브젝트 B 의 이동축 Line
      * @param  planeA        오브젝트 A 의 기준 Plane (회전 방지)
      * @param  planeB        오브젝트 B 의 기준 Plane (회전 방지)
-     * @param  minPosition   최소 이동 범위 (mm)
-     * @param  maxPosition   최대 이동 범위 (mm)
+     * @param  minPosition   최소 이동 범위 - 오브젝트 A 위치 기준 절대값 (mm)
+     * @param  maxPosition   최대 이동 범위 - 오브젝트 A 위치 기준 절대값 (mm)
      */
     public SliderJoint(Line lineA, Line lineB,
                        Plane planeA, Plane planeB,
@@ -79,16 +79,28 @@ public class SliderJoint : Joint
 
     /**
      * @brief  오브젝트 B 의 현재 위치를 이동축에 투영하여 클램프된 위치를 반환한다.
+     *         이동 방향 축 성분만 클램프하고 나머지 축(Y, Z 등)은 B 의 현재 위치를 유지한다.
      * @param  currentBPosition    오브젝트 B 의 현재 위치
      * @param  originPosition      이동축 시작점 (오브젝트 A 의 위치)
      * @param  moveDirection       이동 방향 벡터
-     * @return Vector3             클램프된 위치
+     * @return Vector3             클램프된 위치 (이동 방향 축만 보정, 나머지 축 유지)
      */
     public Vector3 GetClampedPosition(Vector3 currentBPosition, Vector3 originPosition, Vector3 moveDirection)
     {
         float distance = GetProjectedDistance(_lineA, currentBPosition, originPosition, moveDirection);
         SetPosition(distance);
-        return originPosition + moveDirection * _currentPosition;
+
+        // 이동 방향(예: X축) 기준으로 클램프된 목표 위치 계산
+        // 이 시점에서 이동 방향 외 축(Y, Z)은 A 의 위치 기준으로 계산되어 있음
+        Vector3 projectedOrigin = originPosition + moveDirection * _currentPosition;
+
+        // 목표 위치와 B 현재 위치의 차이 계산
+        Vector3 diff = projectedOrigin - currentBPosition;
+
+        // 차이 벡터에서 이동 방향 성분만 추출
+        // → 이동 방향 외 축(Y, Z)의 차이는 제거되고 이동 방향 축 차이만 남음
+        // → B 현재 위치에 이동 방향 성분만 더하면 Y, Z 는 자연스럽게 유지됨
+        return currentBPosition + Vector3.Project(diff, moveDirection);
     }
 
     //TODO: 추후에 다시 확인 - 구속된 오브젝트끼리 위치가 다르면 구속된 형태로 변경되게끔 하는 작업 이후

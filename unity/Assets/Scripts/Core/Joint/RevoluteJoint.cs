@@ -2,7 +2,7 @@
 // 파일명  : RevoluteJoint.cs
 // 역할    : 회전 조인트 클래스
 // 작성자  : 이현화
-// 작성일  : 2026-03-30
+// 작성일  : 2026-04-01
 // 수정이력: 
 // ============================================================
 
@@ -22,6 +22,12 @@ public class RevoluteJoint : Joint
     public float MinAngle => _minAngle;                    // 최소 회전 각도
     public float MaxAngle => _maxAngle;                    // 최대 회전 각도
     public bool IsLineConstrained => _isLineConstrained;   // Line 구속 등록 여부
+
+    /**
+     * @brief  현재 사용중인 회전축(라인B 방향)을 반환한다.
+     *         lineB가 null이면 lineA의 방향을 반환하고, 그마저 없으면 World X축을 반환한다.
+     */
+    public Vector3 Axis => (_lineB != null) ? _lineB.Direction : ((_lineA != null) ? _lineA.Direction : Vector3.right);
 
     /**
      * @brief  두 선을 회전축으로 하는 회전 조인트를 생성한다.
@@ -49,6 +55,16 @@ public class RevoluteJoint : Joint
     public void SetAngle(float angle)
     {
         _currentAngle = Mathf.Clamp(angle, _minAngle, _maxAngle);
+    }
+
+    /**
+    * @brief  오브젝트 B 의 현재 위치를 기반으로 lineB 를 갱신한다.
+    *         매 프레임 오브젝트 B 가 움직일 수 있으므로 Update 시점에 호출한다.
+    * @param  lineB    갱신할 오브젝트 B 의 회전축 Line
+    */
+    public void UpdateLineB(Line lineB)
+    {
+        _lineB = lineB;
     }
 
     /**
@@ -87,9 +103,10 @@ public class RevoluteJoint : Joint
     }
 
     /**
-     * @brief  회전 구속 조건을 적용한다.
-     *         lineA 와 lineB 가 일치하도록 오브젝트 B 의 위치를 보정하고,
-     *         현재 각도를 기준으로 lineA 축 방향의 회전 변환을 계산한다.
+     * @brief  회전 구속 조건을 등록한다.
+     *         아래 조건을 확인하여 구속 상태를 저장한다.
+     *         ① lineA 와 lineB 가 일치 → _isLineConstrained 에 저장
+     * @return bool  구속 상태(_isLineConstrained) 반환
      */
     public override bool ApplyConstraint()
     {
@@ -99,7 +116,9 @@ public class RevoluteJoint : Joint
 
     /**
      * @brief  회전 조인트가 유효한 상태인지 검증한다.
-     *         lineA 와 lineB 가 일치하고 min/max 범위가 올바르면 유효하다.
+     *         아래 두 조건을 모두 만족하면 유효하다.
+     *         ① lineA 와 lineB 가 일치하는지 확인 → Line.IsCoincident()
+     *         ② min/max 범위가 올바른지 확인 (minAngle < maxAngle)
      * @return bool  유효하면 true, 아니면 false
      */
     public override bool IsValid()

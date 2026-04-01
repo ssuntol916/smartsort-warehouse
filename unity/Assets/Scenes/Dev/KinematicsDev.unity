@@ -246,38 +246,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 604712594}
   m_LocalEulerAnglesHint: {x: 50, y: -30, z: 0}
---- !u!1 &274286104
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 274286105}
-  m_Layer: 0
-  m_Name: RotatingPivot
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &274286105
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 274286104}
-  serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children:
-  - {fileID: 283297081}
-  m_Father: {fileID: 1076392863}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &283297077
 GameObject:
   m_ObjectHideFlags: 0
@@ -385,12 +353,12 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 283297077}
   serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: 0.7071068, w: 0.7071068}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 3, z: 0}
   m_LocalScale: {x: 2, y: 2, z: 2}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 274286105}
+  m_Father: {fileID: 1389634976}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 90}
 --- !u!1 &505702789
 GameObject:
@@ -869,7 +837,6 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 1195101939}
-  - {fileID: 274286105}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &1076392864
@@ -884,8 +851,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 64024d3310e331548bbdc597e262d972, type: 3}
   m_Name: 
   m_EditorClassIdentifier: SmartSortScripts::RevoluteJointComponent
-  _objectA: {fileID: 1195101939}
-  _objectB: {fileID: 274286105}
+  _objectA: {fileID: 1389634976}
+  _objectB: {fileID: 283297081}
   _minAngle: -90
   _maxAngle: 90
   _rotationAxis: {x: 1, y: 0, z: 0}
@@ -1158,7 +1125,8 @@ Transform:
   m_LocalPosition: {x: 3, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
-  m_Children: []
+  m_Children:
+  - {fileID: 283297081}
   m_Father: {fileID: 1195101939}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 90}
 --- !u!1 &1448522214
@@ -1240,7 +1208,7 @@ Transform:
   m_GameObject: {fileID: 1926094527}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 1}
+  m_LocalPosition: {x: -4.5, y: 0, z: 1}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1466,7 +1434,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: SmartSortScripts::SliderFreezeTestManager
   _objectB: {fileID: 1926094528}
-  _sliderSpeed: 0.5
+  _sliderSpeed: 10
 --- !u!4 &2036656611
 Transform:
   m_ObjectHideFlags: 0
@@ -1591,9 +1559,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 205114c60d9142940910a9e84a757760, type: 3}
   m_Name: 
   m_EditorClassIdentifier: '::'
-  _objectB: {fileID: 274286105}
+  _objectB: {fileID: 283297081}
   _jointComponent: {fileID: 1076392864}
-  _rotateSpeed: 5
+  _rotateSpeed: 500
   _useMouseY: 1
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
