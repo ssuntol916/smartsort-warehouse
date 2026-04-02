@@ -136,28 +136,12 @@ public class RevoluteJointComponent : MonoBehaviour
     }
 
     /**
-     * @brief  Inspector 에서 값 변경 시 Line 을 재생성하고 RevoluteJoint 를 재초기화한다.
-     *         Play 모드에서 _objectA·B 가 바뀌면 Rigidbody 참조·프리즈 조건도 갱신한다.
+     * @brief  Inspector 에서 값 변경 시 Line 을 재생성하고
+     *         RevoluteJoint 를 재초기화한다.
      */
     private void OnValidate()
     {
         if (_objectA == null || _objectB == null) return;
-
-        // Play 모드: ObjectA·B 변경 시 Rigidbody 참조·프리즈 조건·초기 회전 기준값 갱신
-        if (Application.isPlaying)
-        {
-            _rigidbodyA       = _objectA.GetComponent<Rigidbody>();
-            _rigidbodyB       = _objectB.GetComponent<Rigidbody>();
-            _freezeConstraint = GetFreezeConstraintByDirection();
-
-            // _initialDirection / _initialRotation 은 Update() 회전 클램프 계산의 기준이므로
-            // ObjectB 가 바뀌면 새 ObjectB 기준으로 재설정해야 한다.
-            _initialRotation = _objectB.rotation;
-            Vector3 perp = Vector3.Cross(_rotationAxis, Vector3.forward);
-            if (perp.magnitude < ApplyTolerance)
-                perp = Vector3.Cross(_rotationAxis, Vector3.right);
-            _initialDirection = _objectB.rotation * perp;
-        }
 
         // 절대적인 World X축이 아닌, _objectA가 회전한 만큼 _rotationAxis도 같이 회전시켜서 로컬 축으로 만듦
         Vector3 localAxisA = _objectA.rotation * _rotationAxis;

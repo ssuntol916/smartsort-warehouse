@@ -1,6 +1,6 @@
 // ============================================================
 // 파일명  : MeshGeometryPicker.cs
-// 역할    : Scene View에서 메시 면·Edge 선택을 위한 지오메트리 유틸리티
+// 역할    : Scene View에서 메쉬 면·Edge 선택을 위한 지오메트리 유틸리티
 //           - 레이캐스트로 삼각형 인덱스 탐색
 //           - BFS 코플래너 확장으로 동일 Face 삼각형 추출
 //           - Face → Plane(pointA, pointB, pointC) 변환
@@ -15,7 +15,7 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /**
- * @brief   메시 면(Face)·Edge(Edge) 선택에 필요한 지오메트리 계산 유틸리티. (static)
+ * @brief   메쉬 면(Face)·Edge(Edge) 선택에 필요한 지오메트리 계산 유틸리티. (static)
  *          모두 Editor 전용.
  */
 public static class MeshGeometryPicker
@@ -76,8 +76,8 @@ public static class MeshGeometryPicker
     // Face(Plane) 탐색
     // ============================================================
     /**
-     * @brief   동일면(coplanar) 확장.  법선이 유사한 인접삼각형을 BFS 방식으로 탐색, 삼각형 인덱스 반환.
-     * @param   mesh                메시
+     * @brief   동일면(coplanar) 확장. 법선이 유사한 인접삼각형 확장하여 목록 반환. 법선은 CoplanarAngleTolerance 로 검사. BFS 로 확장
+     * @param   mesh                메쉬
      * @param   seedTriangleIndex   시작할 씨드 삼각형
      * @return  List<int>           동일평면 삼각형 목록
      */
@@ -101,7 +101,7 @@ public static class MeshGeometryPicker
         queue.Enqueue(seedTriangleIndex);
 
         // 탐색하는 삼각형이 씨드 삼각형의 법선과 동일하면 반환에 추가
-        // BFS 방식 탐색: 인접삼각형이 있으면 Queue 추가, 없으면 다음 Queue 로 넘어가며 소진
+        // 인접삼각형이 있으면 Queue 추가, 없으면 다음 Queue 로 넘어가며 소진
         while (queue.Count > 0)
         {
             int current = queue.Dequeue();
@@ -113,9 +113,12 @@ public static class MeshGeometryPicker
             // 탐색
             foreach (int neighbor in neighbors)
             {
+                // 이전에 탐색했는지 검사 (visited)
                 if (visited.Contains(neighbor)) continue;
                 visited.Add(neighbor);
 
+                // 탐색하고 있는 삼각형 동일면 판별 (neighbor)
+                // 있으면 queue 에 추가. result 에 추가는 loop 초기에서
                 Vector3 neighborNormal = GetTriangleNormal(verts, tris, neighbor);
                 if (Vector3.Angle(seedNormal, neighborNormal) < CoplanarAngleTolerance)
                     queue.Enqueue(neighbor);
@@ -243,207 +246,6 @@ public static class MeshGeometryPicker
     public static Line EdgeToLine((Vector3, Vector3) edge)
     {
         return new Line(edge.Item1, edge.Item2);
-    }
-
-    // ============================================================
-    // 원통 탐지 — Connectivity-based Detection
-    // ============================================================
-    // 탐지 흐름:
-    //   1. [BFS 확장]  시드 삼각형에서 인접 삼각형을 BFS 로 확장.
-    //                  인접 법선 각도가 CylinderBFSAngle(50°) 이내인 것만 수락.
-    //                  → 날카로운 모서리에서 자동 정지, 완만한 곡면(원통) 전체 수집
-    //   2. [최소 호 각도] 법선 분포가 충분히 퍼져 있어야 함 (평면 오탐 방지)
-    //   3. [축 추정]   BFS 결과 법선 목록에서 층화 샘플링한 외적 평균으로 축 방향 추정
-    //   4. [수직 검증] 모든 법선이 추정 축에 수직 (±15°) 이어야 함 (구·토러스 등 제외)
-    //   5. [반경 검증] 버텍스들이 추정 축으로부터 일정 반경을 유지해야 함 (원통성 확인)
-    //   6. [축 선분]   원형 중심 + 축 방향 최소·최대 투영으로 Line 반환
-
-    // BFS 인접 법선 허용 각도 (도). 원통 분할 수에 따라 조정 필요
-    private const float CylinderBFSAngle    = 50f;
-    // 법선이 퍼져야 하는 최소 호 각도 (도). 이보다 작으면 평면으로 간주
-    private const float CylinderMinArcAngle = 15f;
-    // 법선-축 수직 허용 각도 (도)
-    private const float CylinderPerpTol     = 15f;
-    // 반경 상대 표준편차 허용치 (0~1). 클수록 불규칙한 원통도 허용
-    private const float CylinderRadiusRelStdDev = 0.25f;
-    // BFS 최대 삼각형 수 (성능 상한)
-    private const int   CylinderMaxTriangles = 600;
-
-    /**
-     * @brief   시드 삼각형에서 Connectivity-based Detection 으로 원통 측면을 탐지하고,
-     *          회전축 Line 과 면을 이루는 삼각형 인덱스 목록을 반환한다.
-     *          일부 Face 만 원통을 이뤄도 해당 집합에서 축을 추정한다.
-     * @param   mesh                대상 Mesh
-     * @param   meshTransform       대상 Transform
-     * @param   seedTriIdx          시드 삼각형 인덱스
-     * @param[out] axisLine         추정된 원통 회전축 Line (실패 시 null)
-     * @param[out] cylinderTriangles 원통 면을 이루는 삼각형 인덱스 목록 (실패 시 null)
-     * @return  bool                원통 탐지 성공 여부
-     */
-    public static bool TryDetectCylinderFace(
-        Mesh mesh, Transform meshTransform, int seedTriIdx,
-        out Line axisLine, out List<int> cylinderTriangles)
-    {
-        axisLine          = null;
-        cylinderTriangles = null;
-        if (mesh == null) return false;
-
-        int[] tris    = mesh.triangles;
-        Vector3[] verts = mesh.vertices;
-        int triCount  = tris.Length / 3;
-        if (seedTriIdx < 0 || seedTriIdx >= triCount) return false;
-
-        // ── Phase 1: BFS 확장 (smooth-angle criterion) ──────────────────────
-        var adjacency  = BuildAdjacency(tris, triCount);
-        var triNormals = new Dictionary<int, Vector3>(CylinderMaxTriangles);
-        var expanded   = new List<int>(CylinderMaxTriangles);
-        var visited    = new HashSet<int>();
-        var queue      = new Queue<int>();
-
-        Vector3 seedNormal = GetTriangleNormal(verts, tris, seedTriIdx);
-        triNormals[seedTriIdx] = seedNormal;
-        visited.Add(seedTriIdx);
-        queue.Enqueue(seedTriIdx);
-
-        while (queue.Count > 0 && expanded.Count < CylinderMaxTriangles)
-        {
-            int cur = queue.Dequeue();
-            expanded.Add(cur);
-
-            if (!adjacency.TryGetValue(cur, out var neighbors)) continue;
-            Vector3 curNormal = triNormals[cur];
-
-            foreach (int nb in neighbors)
-            {
-                if (visited.Contains(nb)) continue;
-                visited.Add(nb);
-
-                Vector3 nbNormal = GetTriangleNormal(verts, tris, nb);
-                // 인접 삼각형 법선이 CylinderBFSAngle 이내면 수락 (곡면 연속성)
-                if (Vector3.Angle(curNormal, nbNormal) <= CylinderBFSAngle)
-                {
-                    triNormals[nb] = nbNormal;
-                    queue.Enqueue(nb);
-                }
-            }
-        }
-
-        if (expanded.Count < 4) return false;
-
-        // ── Phase 2: 월드 공간 법선 수집 ────────────────────────────────────
-        var normals = new List<Vector3>(expanded.Count);
-        foreach (int triIdx in expanded)
-        {
-            Vector3 a = meshTransform.TransformPoint(verts[tris[triIdx * 3]]);
-            Vector3 b = meshTransform.TransformPoint(verts[tris[triIdx * 3 + 1]]);
-            Vector3 c = meshTransform.TransformPoint(verts[tris[triIdx * 3 + 2]]);
-            Vector3 n = Vector3.Cross(b - a, c - a);
-            if (n.sqrMagnitude > 1e-10f) normals.Add(n.normalized);
-        }
-        if (normals.Count < 4) return false;
-
-        // ── Phase 3: 최소 호 각도 검사 (평면 오탐 방지) ─────────────────────
-        // normals[0] 기준으로 가장 큰 각도를 구한다.
-        float maxArc = 0f;
-        for (int i = 1; i < normals.Count; i++)
-        {
-            float a = Vector3.Angle(normals[0], normals[i]);
-            if (a > maxArc) maxArc = a;
-        }
-        if (maxArc < CylinderMinArcAngle) return false;
-
-        // ── Phase 4: 축 추정 (층화 샘플링 외적 평균) ────────────────────────
-        Vector3 axis = EstimateCylinderAxis(normals);
-        if (axis.sqrMagnitude < 0.5f) return false;
-
-        // ── Phase 5: 수직 검증 — 모든 법선이 축에 수직이어야 함 ─────────────
-        float sinPerpTol = Mathf.Sin(CylinderPerpTol * Mathf.Deg2Rad);
-        foreach (Vector3 n in normals)
-        {
-            if (Mathf.Abs(Vector3.Dot(n, axis)) > sinPerpTol) return false;
-        }
-
-        // ── Phase 6: 버텍스에서 원형 중심·범위·반경 분포 계산 ───────────────
-        var vertexSet = new HashSet<int>();
-        foreach (int triIdx in expanded)
-        {
-            vertexSet.Add(tris[triIdx * 3]);
-            vertexSet.Add(tris[triIdx * 3 + 1]);
-            vertexSet.Add(tris[triIdx * 3 + 2]);
-        }
-
-        float minT = float.MaxValue, maxT = float.MinValue;
-        Vector3 radialSum = Vector3.zero;
-        int vCount = 0;
-        foreach (int vi in vertexSet)
-        {
-            Vector3 wp = meshTransform.TransformPoint(verts[vi]);
-            float t    = Vector3.Dot(wp, axis);
-            if (t < minT) minT = t;
-            if (t > maxT) maxT = t;
-            radialSum += wp - t * axis;
-            vCount++;
-        }
-        Vector3 center = radialSum / vCount;
-
-        // ── Phase 7: 반경 일관성 검증 ────────────────────────────────────────
-        // 버텍스들이 모두 비슷한 반경 거리를 유지해야 원통
-        float sumR = 0f, sumR2 = 0f;
-        foreach (int vi in vertexSet)
-        {
-            Vector3 wp       = meshTransform.TransformPoint(verts[vi]);
-            Vector3 fromCtr  = wp - center;
-            float   projAxis = Vector3.Dot(fromCtr, axis);
-            float   r        = (fromCtr - projAxis * axis).magnitude;
-            sumR  += r;
-            sumR2 += r * r;
-        }
-        float meanR  = sumR  / vCount;
-        float varR   = sumR2 / vCount - meanR * meanR;
-        // 상대 표준편차가 임계값 초과 → 원통이 아님
-        if (meanR > 0.001f && Mathf.Sqrt(Mathf.Max(0f, varR)) / meanR > CylinderRadiusRelStdDev)
-            return false;
-
-        axisLine          = new Line(center + minT * axis, center + maxT * axis);
-        cylinderTriangles = expanded;
-        return true;
-    }
-
-    /**
-     * @brief   법선 목록에서 원통 축 방향을 추정한다.
-     *          BFS 순서의 앞 1/4 × 뒤 1/2 구간을 층화 샘플링하여 외적을 평균한다.
-     *          이 구간은 공간적으로 가장 멀리 떨어져 있으므로 외적이 안정적이다.
-     */
-    private static Vector3 EstimateCylinderAxis(List<Vector3> normals)
-    {
-        int n       = normals.Count;
-        int quarter = Mathf.Max(1, n / 4);
-        int half    = Mathf.Max(1, n / 2);
-        int step    = Mathf.Max(1, (n - half) / 8);
-
-        Vector3 axisSum = Vector3.zero;
-        Vector3 signRef = Vector3.zero;
-        int     sampled = 0;
-
-        for (int i = 0; i < quarter && sampled < 40; i++)
-        {
-            for (int j = half; j < n && sampled < 40; j += step)
-            {
-                Vector3 cross = Vector3.Cross(normals[i], normals[j]);
-                float   mag   = cross.magnitude;
-                if (mag < 0.01f) continue;
-
-                Vector3 candidate = cross / mag;
-                // 부호 정규화: 모든 후보를 동일 반구로
-                if (signRef == Vector3.zero) signRef = candidate;
-                if (Vector3.Dot(candidate, signRef) < 0f) candidate = -candidate;
-
-                axisSum += candidate;
-                sampled++;
-            }
-        }
-
-        return sampled > 0 ? axisSum.normalized : Vector3.zero;
     }
     // ============================================================
     // 내부 유틸리티

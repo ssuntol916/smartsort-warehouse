@@ -1,10 +1,8 @@
 // ============================================================
 // 파일명  : RevoluteJointComponentEditor.cs
 // 역할    : RevoluteJointComponent 커스텀 Inspector
-//           "RevoluteJoint 생성" 버튼으로 회전축 선택 세션을 시작하고,
-//           확인 클릭 시 선택된 Line 방향을 _rotationAxis 에,
-//           선택된 메시의 GameObject Transform 을 _objectA·B 에 반영한다.
-//           취소 클릭 시 선택 상태를 초기화하고 Component는 수정하지 않는다.
+//           Scene View 메쉬 엣지 선택으로 회전축 Line을 지정하는 UI를 제공한다.
+//           선택된 Line 정보(pointA, pointB, 방향)를 Inspector에 표시한다.
 // 작성자  : 이건호
 // 작성일  : 2026-03-30
 // ============================================================
@@ -13,164 +11,87 @@ using UnityEditor;
 using UnityEngine;
 
 [CustomEditor(typeof(RevoluteJointComponent))]
+/**
+ * @ brief  'RevoluteJointComponent'를 Editor 에서 편집하기 위한 스크립트. Component 에 표시할 정보 출력.
+ */
 public class RevoluteJointComponentEditor : Editor
 {
     private SerializedProperty _objectA;
     private SerializedProperty _objectB;
     private SerializedProperty _minAngle;
     private SerializedProperty _maxAngle;
-    private SerializedProperty _rotationAxis;
 
-    // 에디터 임시 선택 상태 (직렬화되지 않음)
-    private Line      _axisLineA;
-    private Line      _axisLineB;
-    private Transform _selectedTransformA;   // axisLineA 선택 시 해당 메시의 Transform
-    private Transform _selectedTransformB;   // axisLineB 선택 시 해당 메시의 Transform
-    private bool      _isCreating;
-
-    // ObjectA·B 변경 감지용 캐시
-    private UnityEngine.Object _cachedObjectA;
-    private UnityEngine.Object _cachedObjectB;
+    // 에디터 세션 중 선택된 회전축 Line (직렬화되지 않음 - 에디터 임시 저장)
+    private Line _axisLineA;
+    private Line _axisLineB;
 
     private void OnEnable()
     {
-        _objectA      = serializedObject.FindProperty("_objectA");
-        _objectB      = serializedObject.FindProperty("_objectB");
-        _minAngle     = serializedObject.FindProperty("_minAngle");
-        _maxAngle     = serializedObject.FindProperty("_maxAngle");
-        _rotationAxis = serializedObject.FindProperty("_rotationAxis");
-
-        // Inspector 가 활성화될 때 현재 참조를 캐시
-        _cachedObjectA = _objectA.objectReferenceValue;
-        _cachedObjectB = _objectB.objectReferenceValue;
+        _objectA  = serializedObject.FindProperty("_objectA");
+        _objectB  = serializedObject.FindProperty("_objectB");
+        _minAngle = serializedObject.FindProperty("_minAngle");
+        _maxAngle = serializedObject.FindProperty("_maxAngle");
     }
 
     public override void OnInspectorGUI()
     {
         serializedObject.Update();
 
-        // --- 기본 설정 ---
+        // GUI 설정
+        // - 'RevoluteJoint' 정보
         EditorGUILayout.LabelField("RevoluteJoint 설정", EditorStyles.boldLabel);
-
-        // ObjectA·B 변경 감지: 변경되면 스테이징 상태 초기화
-        EditorGUI.BeginChangeCheck();
-        EditorGUILayout.PropertyField(_objectA, new GUIContent("Object A (회전 기준)"));
-        EditorGUILayout.PropertyField(_objectB, new GUIContent("Object B (회전 대상)"));
-        if (EditorGUI.EndChangeCheck())
-        {
-            var newA = _objectA.objectReferenceValue;
-            var newB = _objectB.objectReferenceValue;
-            if (newA != _cachedObjectA || newB != _cachedObjectB)
-            {
-                _cachedObjectA = newA;
-                _cachedObjectB = newB;
-                _axisLineA         = null;
-                _axisLineB         = null;
-                _selectedTransformA = null;
-                _selectedTransformB = null;
-            }
-        }
-
-        EditorGUILayout.PropertyField(_minAngle,     new GUIContent("최소 각도 (°)"));
-        EditorGUILayout.PropertyField(_maxAngle,     new GUIContent("최대 각도 (°)"));
-        EditorGUILayout.PropertyField(_rotationAxis, new GUIContent("회전축 방향"));
+        EditorGUILayout.PropertyField(_objectA,  new GUIContent("Object A (회전축 기준)"));
+        EditorGUILayout.PropertyField(_objectB,  new GUIContent("Object B (회전 대상)"));
+        EditorGUILayout.PropertyField(_minAngle, new GUIContent("최소 각도 (°)"));
+        EditorGUILayout.PropertyField(_maxAngle, new GUIContent("최대 각도 (°)"));
 
         EditorGUILayout.Space(10);
 
-        var selector     = JointGeometrySelector.Instance;
-        bool isSelecting     = selector.Mode != JointGeometrySelector.SelectionMode.None;
-        bool isSelectingEdge = selector.Mode == JointGeometrySelector.SelectionMode.Edge;
+        // - 엣지(Line) 지정상태 GUI
+        EditorGUILayout.LabelField("메쉬 엣지 선택으로 회전축 지정", EditorStyles.boldLabel);
+        DrawLineField("Object A 회전축", _axisLineA);
+        DrawLineField("Object B 회전축", _axisLineB);
 
-        if (!_isCreating)
+        EditorGUILayout.Space(6);
+
+        // - 엣지(Line) 선택 버튼
+        var selector = JointGeometrySelector.Instance;
+        bool isSelectingEdge = selector.Mode == JointGeometrySelector.SelectionMode.Edge;
+        bool isSelecting     = selector.Mode != JointGeometrySelector.SelectionMode.None;
+
+        using (new EditorGUI.DisabledScope(isSelecting))
         {
-            // --- "생성" 버튼: 클릭하면 선택 UI 표시 ---
-            if (GUILayout.Button("RevoluteJoint 생성"))
+            // Button 이 선택되면 'JointGeometrySelector' 호출. Scene View 에서 엣지(Line) 를 선택하도록 한다.
+            if (GUILayout.Button("Scene View에서 회전축 엣지 선택  (A → B 순서)"))
             {
-                _isCreating         = true;
-                _axisLineA          = null;
-                _axisLineB          = null;
-                _selectedTransformA = null;
-                _selectedTransformB = null;
+                selector.StartEdgeSelection(
+                    line => { _axisLineA = line; Repaint(); },
+                    line => { _axisLineB = line; Repaint(); });
             }
         }
-        else
+        // - 엣지(Line) 선택 세션 중 표시할 버튼
+        if (isSelectingEdge)
         {
-            // --- 회전축 선택 UI ---
-            EditorGUILayout.LabelField("회전축 Edge 선택", EditorStyles.boldLabel);
-            DrawLineField("Object A 기준축", _axisLineA);
-            DrawLineField("Object B 회전축", _axisLineB);
+            string msg = selector.Step == JointGeometrySelector.SelectionStep.WaitA
+                ? "Object A  회전축 엣지를 Scene View에서 클릭하세요."
+                : "Object B  회전축 엣지를 Scene View에서 클릭하세요.";
+            EditorGUILayout.HelpBox(msg, MessageType.Info);
 
-            EditorGUILayout.Space(6);
-
-            using (new EditorGUI.DisabledScope(isSelecting))
-            {
-                if (GUILayout.Button("Scene View에서 Edge 선택  (A → B 순서)"))
-                {
-                    selector.StartEdgeSelection(
-                        (line, t) => { _axisLineA = line; _selectedTransformA = t; Repaint(); },
-                        (line, t) => { _axisLineB = line; _selectedTransformB = t; Repaint(); });
-                }
-            }
-
-            if (isSelectingEdge)
-            {
-                string msg = selector.Step == JointGeometrySelector.SelectionStep.WaitA
-                    ? "Object A  회전축 Edge를 Scene View에서 클릭하세요."
-                    : "Object B  회전축 Edge를 Scene View에서 클릭하세요.";
-                EditorGUILayout.HelpBox(msg, MessageType.Info);
-
-                if (GUILayout.Button("Scene View 선택 취소"))
-                    selector.Cancel();
-            }
-
-            EditorGUILayout.Space(8);
-
-            // --- 확인 / 취소 버튼 ---
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                using (new EditorGUI.DisabledScope(_axisLineA == null))
-                {
-                    if (GUILayout.Button("확인"))
-                    {
-                        // 회전축 방향 반영
-                        _rotationAxis.vector3Value = _axisLineA.Direction;
-
-                        // 선택된 메시의 GameObject 를 ObjectA·B 에 반영
-                        if (_selectedTransformA != null)
-                            _objectA.objectReferenceValue = _selectedTransformA;
-                        if (_selectedTransformB != null)
-                            _objectB.objectReferenceValue = _selectedTransformB;
-
-                        serializedObject.ApplyModifiedProperties();
-
-                        selector.Cancel();
-                        _isCreating         = false;
-                        _axisLineA          = null;
-                        _axisLineB          = null;
-                        _selectedTransformA = null;
-                        _selectedTransformB = null;
-                    }
-                }
-
-                if (GUILayout.Button("취소"))
-                {
-                    // 선택기만 초기화, Component는 수정하지 않음
-                    selector.Cancel();
-                    _isCreating         = false;
-                    _axisLineA          = null;
-                    _axisLineB          = null;
-                    _selectedTransformA = null;
-                    _selectedTransformB = null;
-                }
-            }
+            if (GUILayout.Button("선택 취소"))
+                selector.Cancel();
         }
 
         serializedObject.ApplyModifiedProperties();
     }
 
     // ============================================================
-    // 내부 유틸리티
+    // 헬퍼
     // ============================================================
+    /** 
+    * @brief    엣지(Line)가 선택되었는 지 확인하고 표시하는 메서드.
+    * @param    label   라벨로 표시할 이름
+    * @param    Line    Line 개체
+    */
     private static void DrawLineField(string label, Line line)
     {
         if (line == null)
@@ -191,6 +112,10 @@ public class RevoluteJointComponentEditor : Editor
             EditorGUILayout.LabelField("  방향",    FormatVec(line.Direction));
         }
     }
-
+    /**
+     * @brief   벡터 값 출력 메서드.
+     * @param   Vector3
+     * @return  string 으로 반환
+     */
     private static string FormatVec(Vector3 v) => $"({v.x:F3}, {v.y:F3}, {v.z:F3})";
 }
