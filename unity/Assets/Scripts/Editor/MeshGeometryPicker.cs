@@ -1,21 +1,21 @@
 // ============================================================
 // 파일명  : MeshGeometryPicker.cs
-// 역할    : Scene View에서 메쉬 면·Edge 선택을 위한 지오메트리 유틸리티
-//           - 레이캐스트로 삼각형 인덱스 탐색
-//           - BFS 코플래너 확장으로 동일 Face 삼각형 추출
+// 역할    : Scene View에서 Face·Edge 선택을 위한 지오메트리 유틸리티
+//           - Raycast로 삼각형 인덱스 탐색
+//           - BFS 방식으로 코플래너 확장하여 동일 Face 삼각형 추출
 //           - Face → Plane(pointA, pointB, pointC) 변환
 //           - 경계 Edge(Boundary Edge) 추출
 //           - 마우스 근접 Edge 탐색
 //           - Edge → Line(pointA, pointB) 변환
 // 작성자  : 이건호
-// 작성일  : 2026-03-30
+// 작성일  : 2026-04-02
 // ============================================================
 
 using System.Collections.Generic;
 using UnityEngine;
 
 /**
- * @brief   메쉬 면(Face)·Edge(Edge) 선택에 필요한 지오메트리 계산 유틸리티. (static)
+ * @brief   Face·Edge 선택에 필요한 지오메트리 계산 유틸리티. (static)
  *          모두 Editor 전용.
  */
 public static class MeshGeometryPicker
@@ -76,7 +76,7 @@ public static class MeshGeometryPicker
     // Face(Plane) 탐색
     // ============================================================
     /**
-     * @brief   동일면(coplanar) 확장. 법선이 유사한 인접삼각형 확장하여 목록 반환. 법선은 CoplanarAngleTolerance 로 검사. BFS 로 확장
+     * @brief   동일면(coplanar) 확장. BFS 방식으로 법선이 유사한 인접삼각형을 확장하여 목록 반환. 법선은 CoplanarAngleTolerance 로 검사.
      * @param   mesh                메쉬
      * @param   seedTriangleIndex   시작할 씨드 삼각형
      * @return  List<int>           동일평면 삼각형 목록
@@ -100,8 +100,9 @@ public static class MeshGeometryPicker
         visited.Add(seedTriangleIndex);
         queue.Enqueue(seedTriangleIndex);
 
-        // 탐색하는 삼각형이 씨드 삼각형의 법선과 동일하면 반환에 추가
+        // BFS 방식 탐색
         // 인접삼각형이 있으면 Queue 추가, 없으면 다음 Queue 로 넘어가며 소진
+        // 탐색하는 삼각형이 씨드 삼각형의 법선과 동일하면 반환에 추가
         while (queue.Count > 0)
         {
             int current = queue.Dequeue();
@@ -113,12 +114,9 @@ public static class MeshGeometryPicker
             // 탐색
             foreach (int neighbor in neighbors)
             {
-                // 이전에 탐색했는지 검사 (visited)
                 if (visited.Contains(neighbor)) continue;
                 visited.Add(neighbor);
 
-                // 탐색하고 있는 삼각형 동일면 판별 (neighbor)
-                // 있으면 queue 에 추가. result 에 추가는 loop 초기에서
                 Vector3 neighborNormal = GetTriangleNormal(verts, tris, neighbor);
                 if (Vector3.Angle(seedNormal, neighborNormal) < CoplanarAngleTolerance)
                     queue.Enqueue(neighbor);

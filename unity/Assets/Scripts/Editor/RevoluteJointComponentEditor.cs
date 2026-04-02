@@ -1,10 +1,10 @@
 // ============================================================
 // 파일명  : RevoluteJointComponentEditor.cs
 // 역할    : RevoluteJointComponent 커스텀 Inspector
-//           Scene View 메쉬 엣지 선택으로 회전축 Line을 지정하는 UI를 제공한다.
+//           Scene View 에서 회전축 Edge 선택으로 Line 을 생성하는 UI를 제공한다.
 //           선택된 Line 정보(pointA, pointB, 방향)를 Inspector에 표시한다.
 // 작성자  : 이건호
-// 작성일  : 2026-03-30
+// 작성일  : 2026-04-02
 // ============================================================
 
 using UnityEditor;
@@ -47,34 +47,34 @@ public class RevoluteJointComponentEditor : Editor
 
         EditorGUILayout.Space(10);
 
-        // - 엣지(Line) 지정상태 GUI
-        EditorGUILayout.LabelField("메쉬 엣지 선택으로 회전축 지정", EditorStyles.boldLabel);
+        // - Edge 지정상태 GUI
+        EditorGUILayout.LabelField("메시 Edge 선택으로 회전축 지정", EditorStyles.boldLabel);
         DrawLineField("Object A 회전축", _axisLineA);
         DrawLineField("Object B 회전축", _axisLineB);
 
         EditorGUILayout.Space(6);
 
-        // - 엣지(Line) 선택 버튼
+        // - Edge 선택 버튼
         var selector = JointGeometrySelector.Instance;
         bool isSelectingEdge = selector.Mode == JointGeometrySelector.SelectionMode.Edge;
         bool isSelecting     = selector.Mode != JointGeometrySelector.SelectionMode.None;
 
         using (new EditorGUI.DisabledScope(isSelecting))
         {
-            // Button 이 선택되면 'JointGeometrySelector' 호출. Scene View 에서 엣지(Line) 를 선택하도록 한다.
-            if (GUILayout.Button("Scene View에서 회전축 엣지 선택  (A → B 순서)"))
+            // Button 이 선택되면 'JointGeometrySelector' 호출. Scene View 에서 Edge 를 선택하도록 한다.
+            if (GUILayout.Button("Scene View에서 회전축 Edge 선택  (A → B 순서)"))
             {
                 selector.StartEdgeSelection(
                     line => { _axisLineA = line; Repaint(); },
                     line => { _axisLineB = line; Repaint(); });
             }
         }
-        // - 엣지(Line) 선택 세션 중 표시할 버튼
+        // - Edge 선택 세션 중 표시할 버튼
         if (isSelectingEdge)
         {
             string msg = selector.Step == JointGeometrySelector.SelectionStep.WaitA
-                ? "Object A  회전축 엣지를 Scene View에서 클릭하세요."
-                : "Object B  회전축 엣지를 Scene View에서 클릭하세요.";
+                ? "Object A 회전축 Edge를 Scene View에서 클릭하세요."
+                : "Object B 회전축 Edge를 Scene View에서 클릭하세요.";
             EditorGUILayout.HelpBox(msg, MessageType.Info);
 
             if (GUILayout.Button("선택 취소"))
@@ -88,7 +88,7 @@ public class RevoluteJointComponentEditor : Editor
     // 헬퍼
     // ============================================================
     /** 
-    * @brief    엣지(Line)가 선택되었는 지 확인하고 표시하는 메서드.
+    * @brief    Line이 선택되었는 지 확인하고 Inpsector에 표시하는 메서드.
     * @param    label   라벨로 표시할 이름
     * @param    Line    Line 개체
     */

@@ -1,8 +1,8 @@
 // ============================================================
 // 파일명  : JointGeometrySelector.cs
-// 역할    : Scene View에서 메쉬 면·엣지 선택 상태를 관리하는 에디터 시스템
-//           - 면(Face) 선택: Raycast → 코플래너 병합 → Plane 생성 → 콜백
-//           - 엣지(Edge) 선택: 경계 엣지 표시 → 근접 감지 → Line 생성 → 콜백
+// 역할    : Scene View에서 Face·Edge 선택 상태를 관리하는 에디터 시스템
+//           - Face 선택: Raycast → 코플래너 병합 → Plane 생성 → 콜백
+//           - Edge 선택: 경계 Edge 표시 → 근접 감지 → Line 생성 → 콜백
 //           - Object A → Object B 순서로 2회 선택
 //           - Esc 취소, Event.Use()로 다른 오브젝트 상호작용 차단
 //           - Handles/GL 기반 반투명 오버레이로 선택 시각화
@@ -17,7 +17,7 @@ using UnityEngine;
 using Object = UnityEngine.Object;
 
 /**
- * @brief   Scene View 에서 메쉬 면,엣지 선택 상태를 관리하는 싱글턴 에디터 시스템.
+ * @brief   Scene View 에서 Face·Edge 선택 상태를 관리하는 싱글턴 에디터 시스템.
  */
 public class JointGeometrySelector
 {
@@ -36,13 +36,13 @@ public class JointGeometrySelector
     // 선택 상태
     private MeshFilter[] _allMeshFilters;
 
-    // 면(Plane) 선택 상태
+    // Face 선택 상태
     private List<int>   _hoveredFaceTriangles;      // 커서 올려진 면, 삼각형 인덱스
     private MeshFilter  _hoveredFaceMeshFilter;     // 커서 올려진 면, 메쉬필터
     private List<int>   _confirmedFaceTrianglesA;       // 확정된 면, 삼각형 인덱스
     private MeshFilter  _confirmedFaceMeshFilterA;      // 확정된 면, 메쉬필터
 
-    // 엣지(Line) 선택 상태
+    // Edge 선택 상태
     private List<(Vector3, Vector3)>  _currentBoundaryEdges;
     private (Vector3, Vector3)?       _hoveredEdge;
 
@@ -58,7 +58,7 @@ public class JointGeometrySelector
     // 공개 API
     // ============================================================
     /**
-     * @brief   면(Plane) 선택 세션을 시작한다. Object A, B 순서로 두 면을 클릭하여 각각 Plane 콜백을 호출한다.
+     * @brief   Face 선택 세션을 시작한다. Object A, B 순서로 두 Face를 클릭하여 각각 Plane 콜백을 호출한다.
      * @param   Action<Plane>   Object A 면 선택 완료 콜백
      * @param   Action<Plane>   Object B 면 선택 완료 콜백
      */
@@ -75,7 +75,7 @@ public class JointGeometrySelector
     }
 
     /**
-     * @brief   엣지(Line) 선택 세션을 시작한다. Object A, B 순서로 두 엣지를 클릭하여 각각 Line 콜백을 호출한다.
+     * @brief   Edge 선택 세션을 시작한다. Object A, B 순서로 두 Edge를 클릭하여 각각 Line 콜백을 호출한다.
      * @param   Action<Line>    Object A 엣지 선택 완료 콜백
      * @param   Action<Line>    Object B 엣지 선택 완료 콜백
      */
@@ -123,7 +123,7 @@ public class JointGeometrySelector
         if (e.type == EventType.Layout)
             HandleUtility.AddDefaultControl(GUIUtility.GetControlID(FocusType.Passive));
 
-        // 선택 세션 
+        // Ray 핸들링 시작
         Ray ray = HandleUtility.GUIPointToWorldRay(e.mousePosition);
         if (Mode == SelectionMode.Face)
             HandleFaceMode(e, ray, sceneView.camera);
@@ -133,24 +133,24 @@ public class JointGeometrySelector
         DrawOverlay();
     }
     // ============================================================
-    // 선택 세션 중 Ray 핸들링
+    // Ray 핸들링: Face 선택
     // ============================================================
     /**
-     * @brief   커서가 올려진 면 표시 메서드. 커서 이동, 클릭 등의 Event 감지 시, Event, Camera, Ray 를 파라미터로 받아 호출된다.
+     * @brief   커서가 올려진 Face 표시 메서드. 커서 이동, 클릭 등의 Event 감지 시, Event, Camera, Ray 를 파라미터로 받아 호출된다.
      * @param   Event
      * @param   Ray
      * @param   Camera
      */
     private void HandleFaceMode(Event e, Ray ray, Camera camera)
     {
-        // 마우스 이동: 호버 면 업데이트
+        // 마우스 이동: 호버 Face 업데이트
         if (e.type == EventType.MouseMove)
         {
             UpdateFaceHover(ray);
             SceneView.RepaintAll();
         }
 
-        // 좌클릭: 호버 면을 확정
+        // 좌클릭: 호버 Face 를 확정
         if (e.type == EventType.MouseDown && e.button == 0 && !e.alt &&
             _hoveredFaceTriangles != null && _hoveredFaceMeshFilter != null)
         {
@@ -178,7 +178,7 @@ public class JointGeometrySelector
             SceneView.RepaintAll();
         }
     }
-    /** 면 호버 중 커서 업데이트 */
+    /** Face 호버 중 커서 업데이트 */
     private void UpdateFaceHover(Ray ray)
     {
         if (MeshGeometryPicker.TryRaycastTriangle(
@@ -193,28 +193,32 @@ public class JointGeometrySelector
             ClearHoverFace();
         }
     }
-    /** 면 호버 해제 */
+    /** Face 호버 해제 */
     private void ClearHoverFace()
     {
         _hoveredFaceTriangles  = null;
         _hoveredFaceMeshFilter = null;
     }
+    // ============================================================
+    // Ray 핸들링: Edge 선택
+    // ============================================================
+
     /**
-     * @brief   커서가 올려진 엣지 표시 메서드. 커서 이동, 클릭 등의 Event 감지 시, Event, Camera, Ray 를 파라미터로 받아 호출된다.
+     * @brief   커서가 올려진 Edge 표시 메서드. 커서 이동, 클릭 등의 Event 감지 시, Event, Camera, Ray 를 파라미터로 받아 호출된다.
      * @param   Event
      * @param   Ray
      * @param   Camera
      */
     private void HandleEdgeMode(Event e, Ray ray, Camera camera)
     {
-        // 마우스 이동: 면 호버 → 경계 엣지 계산 → 근접 엣지 갱신
+        // 마우스 이동: Face 호버 → 경계 Edge 계산 → 근접 Edge 갱신
         if (e.type == EventType.MouseMove)
         {
             UpdateEdgeHover(ray, e.mousePosition, camera);
             SceneView.RepaintAll();
         }
 
-        // 좌클릭: 호버 엣지가 있으면 확정
+        // 좌클릭: 호버 Edge가 있으면 확정
         if (e.type == EventType.MouseDown && e.button == 0 && !e.alt &&
             _hoveredEdge.HasValue)
         {
@@ -238,10 +242,10 @@ public class JointGeometrySelector
             SceneView.RepaintAll();
         }
     }
-    /** 엣지 호버 중 커서 업데이트 */
+    /** Edge 호버 중 커서 업데이트 */
     private void UpdateEdgeHover(Ray ray, Vector2 mousePosition, Camera camera)
     {
-        // 면 호버 -> 경계 엣지 계산
+        // Face 호버 -> 경계 Edge 계산
         if (MeshGeometryPicker.TryRaycastTriangle(
                 ray, _allMeshFilters,
                 out MeshFilter hitFilter, out int triIdx))
@@ -255,7 +259,7 @@ public class JointGeometrySelector
             _currentBoundaryEdges = null;
         }
 
-        // 경계 엣지 중 마우스에 가장 가까운 엣지 감지
+        // 경계 Edge 중 마우스에 가장 가까운 Edge 감지
         if (_currentBoundaryEdges != null &&
             MeshGeometryPicker.TryGetNearestEdge(
                 mousePosition, _currentBoundaryEdges, camera,
@@ -275,7 +279,7 @@ public class JointGeometrySelector
     {
         // 안내 레이블 (SceneView 좌상단)
         Handles.BeginGUI();
-        string modeStr = Mode == SelectionMode.Face ? "면(Face)" : "엣지(Edge)";
+        string modeStr = Mode == SelectionMode.Face ? "Face" : "Edge";
         string stepStr = Step == SelectionStep.WaitA ? "Object A" : "Object B";
         GUI.Label(
             new Rect(10, 30, 520, 22),
@@ -291,7 +295,7 @@ public class JointGeometrySelector
 
     private void DrawFaceOverlay()
     {
-        // 확정된 Object A 면 (초록)
+        // 확정된 Object A Face (초록)
         if (_confirmedFaceTrianglesA != null && _confirmedFaceMeshFilterA != null)
         {
             DrawTriangles(
@@ -301,7 +305,7 @@ public class JointGeometrySelector
                 new Color(0.2f, 0.9f, 0.3f, 0.4f));
         }
 
-        // 호버 중인 면 (노란색 반투명)
+        // 호버 중인 Face (노란색 반투명)
         if (_hoveredFaceTriangles != null && _hoveredFaceMeshFilter != null)
         {
             DrawTriangles(
@@ -314,7 +318,7 @@ public class JointGeometrySelector
 
     private void DrawEdgeOverlay()
     {
-        // 경계 엣지 전체 (회색 반투명)
+        // 경계 Edge 전체 (회색 반투명)
         if (_currentBoundaryEdges != null)
         {
             Handles.color = new Color(0.7f, 0.7f, 0.7f, 0.6f);
@@ -322,7 +326,7 @@ public class JointGeometrySelector
                 Handles.DrawLine(edge.Item1, edge.Item2);
         }
 
-        // 호버 엣지 강조 (주황색, 두께 3px)
+        // 호버 Edge 강조 (주황색, 두께 3px)
         if (_hoveredEdge.HasValue)
         {
             Handles.color = new Color(1f, 0.55f, 0f, 1f);

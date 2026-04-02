@@ -1,11 +1,11 @@
 // ============================================================
 // 파일명  : SliderJointComponentEditor.cs
 // 역할    : SliderJointComponent 커스텀 Inspector
-//           Scene View 메쉬 엣지 선택으로 이동축 Line을,
-//           Scene View 메쉬 면 선택으로 기준 Plane을 지정하는 UI를 제공한다.
+//           Scene View 에서 이동선 Edge 선택으로 Line을,
+//           접촉 Face 선택으로 Plane을 생성하는 UI를 제공한다.
 //           선택된 Line/Plane 정보를 Inspector에 표시한다.
 // 작성자  : 이건호
-// 작성일  : 2026-03-30
+// 작성일  : 2026-04-02
 // ============================================================
 
 using UnityEditor;
@@ -19,11 +19,11 @@ public class SliderJointComponentEditor : Editor
     private SerializedProperty _minPosition;
     private SerializedProperty _maxPosition;
 
-    // 에디터 세션 중 선택된 이동축 엣지(Line) (직렬화되지 않음 - 에디터 임시 저장)
+    // 에디터 세션 중 선택된 이동선 Edge (직렬화되지 않음 - 에디터 임시 저장)
     private Line  _axisLineA;
     private Line  _axisLineB;
 
-    // 에디터 세션 중 선택된 기준 서피스(Plane) (직렬화되지 않음 - 에디터 임시 저장)
+    // 에디터 세션 중 선택된 접촉 Face (직렬화되지 않음 - 에디터 임시 저장)
     private Plane _guidePlaneA;
     private Plane _guidePlaneB;
 
@@ -49,34 +49,34 @@ public class SliderJointComponentEditor : Editor
 
         EditorGUILayout.Space(10);
 
-        // - 엣지(Line) 지정상태 GUI
-        EditorGUILayout.LabelField("메쉬 엣지 선택으로 이동축 지정", EditorStyles.boldLabel);
+        // - Edge 지정상태 GUI
+        EditorGUILayout.LabelField("메쉬 Edge 선택으로 이동축 지정", EditorStyles.boldLabel);
         DrawLineField("Object A 이동축", _axisLineA);
         DrawLineField("Object B 이동축", _axisLineB);
 
         EditorGUILayout.Space(6);
 
-        // - 엣지(Line) 선택 버튼
+        // - Edge 선택 버튼, Line 생성
         var selector       = JointGeometrySelector.Instance;
         bool isSelectingEdge = selector.Mode == JointGeometrySelector.SelectionMode.Edge;
         bool isSelecting     = selector.Mode != JointGeometrySelector.SelectionMode.None;
 
         using (new EditorGUI.DisabledScope(isSelecting))
         {
-            // Button 이 선택되면 'JointGeometrySelector' 호출. Scene View 에서 엣지(Line) 를 선택하도록 한다.
-            if (GUILayout.Button("Scene View에서 이동축 엣지 선택  (A → B 순서)"))
+            // Button 이 선택되면 'JointGeometrySelector' 호출. Scene View 에서 Edge 를 선택하도록 한다.
+            if (GUILayout.Button("Scene View에서 이동축 Edge 선택  (A → B 순서)"))
             {
                 selector.StartEdgeSelection(
                     line => { _axisLineA = line; Repaint(); },
                     line => { _axisLineB = line; Repaint(); });
             }
         }
-        // - 엣지(Line) 선택 세션 중 표시할 버튼
+        // - Edge 선택 세션 중 표시할 버튼
         if (isSelectingEdge)
         {
             string msg = selector.Step == JointGeometrySelector.SelectionStep.WaitA
-                ? "Object A  이동축 엣지를 Scene View에서 클릭하세요."
-                : "Object B  이동축 엣지를 Scene View에서 클릭하세요.";
+                ? "Object A  이동축 Edge를 Scene View에서 클릭하세요."
+                : "Object B  이동축 Edge를 Scene View에서 클릭하세요.";
             EditorGUILayout.HelpBox(msg, MessageType.Info);
 
             if (GUILayout.Button("선택 취소"))
@@ -85,18 +85,18 @@ public class SliderJointComponentEditor : Editor
 
         EditorGUILayout.Space(10);
 
-        // - 면(Plane) 지정상태 GUI
+        // - Face 지정상태 GUI
         EditorGUILayout.LabelField("메쉬 면 선택으로 기준 평면 지정", EditorStyles.boldLabel);
         DrawPlaneField("Object A 기준 평면", _guidePlaneA);
         DrawPlaneField("Object B 기준 평면", _guidePlaneB);
 
         EditorGUILayout.Space(6);
 
-        // - 면(Plane) 선택 버튼
+        // - Face 선택 버튼
         bool isSelectingFace = selector.Mode == JointGeometrySelector.SelectionMode.Face;
         using (new EditorGUI.DisabledScope(isSelecting))
         {
-            // Button 이 선택되면 JointGeometrySelector 호출. Scene View 에서 면(Plane) 을 선택하도록 한다.
+            // Button 이 선택되면 JointGeometrySelector 호출. Scene View 에서 면 을 선택하도록 한다.
             if (GUILayout.Button("Scene View에서 기준 면 선택  (A → B 순서)"))
             {
                 selector.StartFaceSelection(
@@ -104,7 +104,7 @@ public class SliderJointComponentEditor : Editor
                     plane => { _guidePlaneB = plane; Repaint(); });
             }
         }
-        // - 면(Plane) 선택 세션 중 표시할 버튼
+        // - Face 선택 세션 중 표시할 버튼
         if (isSelectingFace)
         {
             string msg = selector.Step == JointGeometrySelector.SelectionStep.WaitA
@@ -122,7 +122,7 @@ public class SliderJointComponentEditor : Editor
     // 헬퍼
     // ============================================================
     /** 
-    * @brief    Line 이 선택되었는 지 확인하고 표시하는 메서드.
+    * @brief    Line이 선택되었는 지 확인하고 Inspector에 표시하는 메서드.
     * @param    label   라벨로 표시할 이름
     * @param    Line    Line 개체
     */
@@ -147,7 +147,7 @@ public class SliderJointComponentEditor : Editor
         }
     }
     /** 
-    * @brief    면(Plane)가 선택되었는 지 확인하고 표시하는 메서드.
+    * @brief    Face가 선택되었는 지 확인하고 Inspector에 표시하는 메서드.
     * @param    label   라벨로 표시할 이름
     * @param    Plane   Plane 개체
     */
