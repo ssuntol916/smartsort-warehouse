@@ -1,7 +1,9 @@
 {
     "name": "SmartSortScripts",
     "rootNamespace": "",
-    "references": [],
+    "references": [
+        "SmartSortConfig"
+    ],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,

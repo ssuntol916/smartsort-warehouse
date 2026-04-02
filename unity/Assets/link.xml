@@ -1,0 +1,10 @@
+<!-- Assets/link.xml -->
+<linker>
+  <assembly fullname="System.Reactive" preserve="all" />
+  <assembly fullname="Websocket.Client" preserve="all" />
+  <assembly fullname="Supabase" preserve="all" />
+  <assembly fullname="Supabase.Realtime" preserve="all" />
+  <assembly fullname="Supabase.Postgrest" preserve="all" />
+  <assembly fullname="Supabase.Core" preserve="all" />
+  <assembly fullname="Newtonsoft.Json" preserve="all" />
+</linker>

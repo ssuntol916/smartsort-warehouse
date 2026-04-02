@@ -97,3 +97,47 @@ InitTestScene*.unity*
 
 # Auto-generated scenes by play mode tests
 /[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
+
+# ============================================================
+# 패키지 매니저 임포트 에셋 (TMP Essentials)
+# ============================================================
+/[Aa]ssets/TextMesh Pro/
+/[Aa]ssets/TextMesh Pro.meta
+
+# ============================================================
+# URP 템플릿 기본 파일 (프로젝트 생성 시 자동 포함)
+# ============================================================
+/[Aa]ssets/TutorialInfo/
+/[Aa]ssets/TutorialInfo.meta
+/[Aa]ssets/Readme.asset
+/[Aa]ssets/Readme.asset.meta
+
+# ============================================================
+# 라이팅 베이크 자동 생성 파일
+# ============================================================
+**/LightingData.asset
+**/LightingData.asset.meta
+**/ReflectionProbe-*.exr
+**/ReflectionProbe-*.exr.meta
+
+# ============================================================
+# IDE 개인 설정
+# ============================================================
+.vscode/
+.vsconfig
+
+# Unity — NuGet 패키지 (NuGetForUnity가 자동 복원)
+/[Aa]ssets/Packages/
+/[Aa]ssets/Packages.meta
+
+# Unity — Supabase 접속 키 (로컬/클라우드 환경별 에셋)
+/[Aa]ssets/Settings/SupabaseConfig_Local.asset
+/[Aa]ssets/Settings/SupabaseConfig_Local.asset.meta
+/[Aa]ssets/Settings/SupabaseConfig_Cloud.asset
+/[Aa]ssets/Settings/SupabaseConfig_Cloud.asset.meta
+
+# ============================================================
+# 3D 모델, 텍스쳐
+# ============================================================
+/[Aa]ssets/Models/
+/[Aa]ssets/Materials/Textures
