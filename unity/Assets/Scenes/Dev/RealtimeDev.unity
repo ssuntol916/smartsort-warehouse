@@ -246,6 +246,66 @@ Transform:
   m_Children: []
   m_Father: {fileID: 604712594}
   m_LocalEulerAnglesHint: {x: 50, y: -30, z: 0}
+--- !u!1001 &316531324
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: 655791098114694471, guid: a5945cd2f06d4274d8e367f236f9cfe0, type: 3}
+      propertyPath: m_Name
+      value: Shuttle
+      objectReference: {fileID: 0}
+    - target: {fileID: 4724170828665772904, guid: a5945cd2f06d4274d8e367f236f9cfe0, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4724170828665772904, guid: a5945cd2f06d4274d8e367f236f9cfe0, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4724170828665772904, guid: a5945cd2f06d4274d8e367f236f9cfe0, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4724170828665772904, guid: a5945cd2f06d4274d8e367f236f9cfe0, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4724170828665772904, guid: a5945cd2f06d4274d8e367f236f9cfe0, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4724170828665772904, guid: a5945cd2f06d4274d8e367f236f9cfe0, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4724170828665772904, guid: a5945cd2f06d4274d8e367f236f9cfe0, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4724170828665772904, guid: a5945cd2f06d4274d8e367f236f9cfe0, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4724170828665772904, guid: a5945cd2f06d4274d8e367f236f9cfe0, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4724170828665772904, guid: a5945cd2f06d4274d8e367f236f9cfe0, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 655791098114694471, guid: a5945cd2f06d4274d8e367f236f9cfe0, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 868603147}
+  m_SourcePrefab: {fileID: 100100000, guid: a5945cd2f06d4274d8e367f236f9cfe0, type: 3}
 --- !u!1 &505702789
 GameObject:
   m_ObjectHideFlags: 0
@@ -425,6 +485,35 @@ Transform:
   m_Children: []
   m_Father: {fileID: 505702790}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &868603146 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 655791098114694471, guid: a5945cd2f06d4274d8e367f236f9cfe0, type: 3}
+  m_PrefabInstance: {fileID: 316531324}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &868603147
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 868603146}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2808342efcceb524f8afdf9f53d7f679, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: SmartSortScripts::ShuttleDigitalTwinController
+  _mqttSubscriber: {fileID: 1138258876}
+  _dirJoint: {fileID: 0}
+  _jointX: {fileID: 0}
+  _jointY: {fileID: 0}
+  _jointZ: {fileID: 0}
+  _cellSizeX: 100
+  _cellSizeY: 100
+  _cellSizeZ: 150
+  _dirAngleXMode: 0
+  _dirAngleYMode: 180
+  _showLog: 1
+  _spurGear2Speed: 120
 --- !u!1 &961739749
 GameObject:
   m_ObjectHideFlags: 0
@@ -556,13 +645,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 961739749}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 1, z: 0, w: 0}
-  m_LocalPosition: {x: 0, y: 1, z: 7}
+  m_LocalRotation: {x: 0.38268322, y: -0, z: -0, w: 0.9238797}
+  m_LocalPosition: {x: 0.435, y: 2.44, z: -2.28}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 180, z: 0}
+  m_LocalEulerAnglesHint: {x: 45, y: 0, z: 0}
 --- !u!114 &961739754
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -570,7 +659,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 961739749}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 618b0e3f6c65dd247a4a016150006c57, type: 3}
   m_Name: 
@@ -669,9 +758,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: dea25c3aafd4c5b4a88a3a503dde2d8b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: SmartSortScripts::MqttSubscriber
-  _brokerHost: 192.168.0.72
+  _brokerHost: 192.168.0.83
   _brokerPort: 1883
-  _topic: warehouse/cmd/shuttle
+  _topics:
+  - warehouse/status/shuttle
+  - warehouse/cmd/shuttle
+  _reconnectDelaySec: 5
 --- !u!1 &1160234425
 GameObject:
   m_ObjectHideFlags: 0
@@ -872,3 +964,4 @@ SceneRoots:
   - {fileID: 505702790}
   - {fileID: 966613770}
   - {fileID: 1138258875}
+  - {fileID: 316531324}

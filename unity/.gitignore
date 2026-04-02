@@ -135,3 +135,9 @@ InitTestScene*.unity*
 /[Aa]ssets/Settings/SupabaseConfig_Local.asset.meta
 /[Aa]ssets/Settings/SupabaseConfig_Cloud.asset
 /[Aa]ssets/Settings/SupabaseConfig_Cloud.asset.meta
+
+# ============================================================
+# 3D 모델, 텍스쳐
+# ============================================================
+/[Aa]ssets/Models/
+/[Aa]ssets/Materials/Textures

@@ -3,7 +3,7 @@
 // 역할    : 4-way 셔틀 ESP32 MQTT 제어 펌웨어
 // 작성자  : 송준호
 // 작성일  : 2026-03-27
-// 수정이력 : 
+// 수정이력 : 2026-04-01 — 서보모터 점진적 이동(smooth move) 적용
 // ============================================================
 
 #include <Arduino.h>
@@ -76,6 +76,17 @@ const int Z_LIFT_STOP      = 90;
 const int Z_LIFT_UP        = 0;    // 감아올리기 (상승)
 const int Z_LIFT_DOWN      = 180;  // 풀어내리기 (하강)
 
+// ============================================================
+// 점진적 이동(Smooth Move) 설정
+// ============================================================
+// 위치 서보 (방향 전환 MG996R): 각도 스텝 기반
+const int   SMOOTH_STEP_DEG       = 2;     // 1스텝당 이동 각도 (°)
+const int   SMOOTH_STEP_DELAY_MS  = 15;    // 스텝 간 대기시간 (ms)
+
+// 연속회전 서보 (MG90S / MG996R): 속도 램프 기반
+const int   RAMP_STEP_DEG        = 5;      // 1스텝당 속도 변화 (°, 90 기준 오프셋)
+const int   RAMP_STEP_DELAY_MS   = 20;     // 램프 스텝 간 대기시간 (ms)
+
 // 셀 간 이동 시간 (ms) — 실측 후 조정 필요
 const unsigned long MOVE_TIME_PER_CELL_XY = 1000;
 const unsigned long MOVE_TIME_PER_CELL_Z  = 1500;
@@ -123,6 +134,10 @@ Servo _servoYR;          // Y축 우측
 Servo _servoZL;          // Z축 좌측 (스풀/벨트)
 Servo _servoZR;          // Z축 우측 (스풀/벨트)
 
+// 현재 서보 각도 추적 — 점진적 이동에 필요
+int _angleDirL = DIR_ANGLE_X_MODE;
+int _angleDirR = DIR_ANGLE_X_MODE;
+
 // 현재 셔틀 상태
 int _currentX = 0;
 int _currentY = 0;
@@ -156,6 +171,149 @@ bool homeAxis(int endstopPin, Servo& servoL, Servo& servoR, int driveAngle, cons
 void publishStatus();
 void publishAlert(const char* level, const char* msg);
 int clampGrid(int value, int maxVal);
+
+// 점진적 이동 함수
+void smoothServoMove(Servo& servo, int& currentAngle, int targetAngle);
+void smoothServoPairMove(Servo& servoL, Servo& servoR,
+                         int& currentAngleL, int& currentAngleR,
+                         int targetAngleL, int targetAngleR);
+void rampDrivePair(Servo& servoL, Servo& servoR, int targetAngle);
+void rampStopPair(Servo& servoL, Servo& servoR, int currentDriveAngle);
+
+// ============================================================
+// 점진적 이동 구현 — 위치 서보용 (방향 전환 MG996R)
+// ============================================================
+
+/**
+ * @brief 위치 서보를 현재 각도에서 목표 각도까지 점진적으로 이동한다.
+ *        SMOOTH_STEP_DEG 단위로 SMOOTH_STEP_DELAY_MS 간격 이동.
+ * @param servo        제어 대상 서보
+ * @param currentAngle 현재 각도 (업데이트됨)
+ * @param targetAngle  목표 각도
+ */
+void smoothServoMove(Servo& servo, int& currentAngle, int targetAngle) {
+    targetAngle = constrain(targetAngle, 0, 180);
+
+    if (currentAngle == targetAngle) return;
+
+    int step = (targetAngle > currentAngle) ? SMOOTH_STEP_DEG : -SMOOTH_STEP_DEG;
+
+    while (currentAngle != targetAngle) {
+        currentAngle += step;
+
+        // 오버슈트 방지
+        if ((step > 0 && currentAngle > targetAngle) ||
+            (step < 0 && currentAngle < targetAngle)) {
+            currentAngle = targetAngle;
+        }
+
+        servo.write(currentAngle);
+        delay(SMOOTH_STEP_DELAY_MS);
+    }
+}
+
+/**
+ * @brief 좌/우 위치 서보 쌍을 동시에 점진적으로 이동한다.
+ *        두 서보가 같은 스텝으로 동기 이동하여 래크 앤 피니언 균형을 유지한다.
+ * @param servoL        좌측 서보
+ * @param servoR        우측 서보
+ * @param currentAngleL 좌측 현재 각도 (업데이트됨)
+ * @param currentAngleR 우측 현재 각도 (업데이트됨)
+ * @param targetAngleL  좌측 목표 각도
+ * @param targetAngleR  우측 목표 각도
+ */
+void smoothServoPairMove(Servo& servoL, Servo& servoR,
+                         int& currentAngleL, int& currentAngleR,
+                         int targetAngleL, int targetAngleR) {
+    targetAngleL = constrain(targetAngleL, 0, 180);
+    targetAngleR = constrain(targetAngleR, 0, 180);
+
+    int stepL = (targetAngleL > currentAngleL) ? SMOOTH_STEP_DEG : -SMOOTH_STEP_DEG;
+    int stepR = (targetAngleR > currentAngleR) ? SMOOTH_STEP_DEG : -SMOOTH_STEP_DEG;
+
+    bool doneL = (currentAngleL == targetAngleL);
+    bool doneR = (currentAngleR == targetAngleR);
+
+    while (!doneL || !doneR) {
+        if (!doneL) {
+            currentAngleL += stepL;
+            if ((stepL > 0 && currentAngleL >= targetAngleL) ||
+                (stepL < 0 && currentAngleL <= targetAngleL)) {
+                currentAngleL = targetAngleL;
+                doneL = true;
+            }
+            servoL.write(currentAngleL);
+        }
+
+        if (!doneR) {
+            currentAngleR += stepR;
+            if ((stepR > 0 && currentAngleR >= targetAngleR) ||
+                (stepR < 0 && currentAngleR <= targetAngleR)) {
+                currentAngleR = targetAngleR;
+                doneR = true;
+            }
+            servoR.write(currentAngleR);
+        }
+
+        delay(SMOOTH_STEP_DELAY_MS);
+    }
+}
+
+// ============================================================
+// 점진적 이동 구현 — 연속회전 서보용 (MG90S / MG996R 스풀)
+// ============================================================
+
+/**
+ * @brief 연속회전 서보 쌍을 정지(90°)에서 목표 속도까지 점진적으로 가속한다.
+ *        90° → targetAngle 방향으로 RAMP_STEP_DEG씩 램프업.
+ * @param servoL      좌측 서보
+ * @param servoR      우측 서보
+ * @param targetAngle 목표 각도 (0=정방향 풀스피드, 180=역방향 풀스피드)
+ */
+void rampDrivePair(Servo& servoL, Servo& servoR, int targetAngle) {
+    int current = MG90S_STOP;  // 시작: 정지 (90°)
+    int step = (targetAngle > current) ? RAMP_STEP_DEG : -RAMP_STEP_DEG;
+
+    while (current != targetAngle) {
+        current += step;
+
+        // 오버슈트 방지
+        if ((step > 0 && current > targetAngle) ||
+            (step < 0 && current < targetAngle)) {
+            current = targetAngle;
+        }
+
+        servoL.write(current);
+        servoR.write(current);
+        delay(RAMP_STEP_DELAY_MS);
+    }
+}
+
+/**
+ * @brief 연속회전 서보 쌍을 현재 속도에서 정지(90°)까지 점진적으로 감속한다.
+ *        currentDriveAngle → 90° 방향으로 RAMP_STEP_DEG씩 램프다운.
+ * @param servoL           좌측 서보
+ * @param servoR           우측 서보
+ * @param currentDriveAngle 현재 구동 각도
+ */
+void rampStopPair(Servo& servoL, Servo& servoR, int currentDriveAngle) {
+    int current = currentDriveAngle;
+    int target = MG90S_STOP;  // 목표: 정지 (90°)
+    int step = (target > current) ? RAMP_STEP_DEG : -RAMP_STEP_DEG;
+
+    while (current != target) {
+        current += step;
+
+        if ((step > 0 && current > target) ||
+            (step < 0 && current < target)) {
+            current = target;
+        }
+
+        servoL.write(current);
+        servoR.write(current);
+        delay(RAMP_STEP_DELAY_MS);
+    }
+}
 
 // ============================================================
 // setup / loop
@@ -257,6 +415,8 @@ void setupServos() {
     _servoDirR.attach(PIN_DIR_RIGHT, 500, 2400);
     _servoDirL.write(DIR_ANGLE_X_MODE);  // 초기: X축 접지
     _servoDirR.write(DIR_ANGLE_X_MODE);
+    _angleDirL = DIR_ANGLE_X_MODE;       // 각도 추적 동기화
+    _angleDirR = DIR_ANGLE_X_MODE;
 
     // X축 주행 (MG90S × 2)
     _servoXL.setPeriodHertz(50);
@@ -298,12 +458,8 @@ bool reconnectMQTT() {
 
     if (_mqttClient.connect(MQTT_CLIENT_ID)) {
         Serial.println("[MQTT] 연결 성공");
-
-        // warehouse/cmd/shuttle 토픽 구독
         _mqttClient.subscribe(TOPIC_CMD_SHUTTLE);
         Serial.printf("[MQTT] 구독: %s\n", TOPIC_CMD_SHUTTLE);
-
-        // 연결 완료 상태 발행
         publishStatus();
         return true;
     }
@@ -322,7 +478,6 @@ bool reconnectMQTT() {
 void onMqttMessage(char* topic, byte* payload, unsigned int length) {
     Serial.printf("[MQTT] 수신 — 토픽: %s\n", topic);
 
-    // JSON 파싱
     JsonDocument doc;
     DeserializationError error = deserializeJson(doc, payload, length);
 
@@ -332,16 +487,26 @@ void onMqttMessage(char* topic, byte* payload, unsigned int length) {
         return;
     }
 
-    // home 명령 처리
-    if (doc.containsKey("action")) {
+    if (!doc["action"].isNull()) {
         const char* action = doc["action"];
         if (strcmp(action, "home") == 0) {
             handleHomeCommand();
             return;
         }
+
+        if (strcmp(action, "servo_direct") == 0) {
+            int pin = doc["pin"] | -1;
+            int angle = doc["angle"] | -1;
+            if (pin == PIN_DIR_LEFT && angle >= 0 && angle <= 180) {
+                // servo_direct도 점진적 이동 적용
+                smoothServoMove(_servoDirL, _angleDirL, angle);
+                Serial.printf("[서보직접] 핀 %d → %d° (smooth)\n", pin, angle);
+                publishStatus();
+            }
+            return;
+        }
     }
 
-    // 이동 명령 처리
     handleMoveCommand(doc);
 }
 
@@ -360,13 +525,11 @@ void handleMoveCommand(JsonDocument& doc) {
     int targetZ = doc["target_z"] | -1;
     const char* binId = doc["bin_id"] | "";
 
-    // 필수 필드 검증
     if (targetX < 0 || targetY < 0 || targetZ < 0) {
         publishAlert("error", "필수 필드 누락 (target_x, target_y, target_z)");
         return;
     }
 
-    // 그리드 범위 검증
     if (targetX >= GRID_MAX_X || targetY >= GRID_MAX_Y || targetZ >= GRID_MAX_Z) {
         Serial.printf("[셔틀] 그리드 범위 초과 — 목표: (%d,%d,%d), 최대: (%d,%d,%d)\n",
                       targetX, targetY, targetZ,
@@ -375,7 +538,6 @@ void handleMoveCommand(JsonDocument& doc) {
         return;
     }
 
-    // 홈 캘리브레이션 미완료 시 경고
     if (!_isHomed) {
         Serial.println("[셔틀] 경고: 홈 캘리브레이션 미완료 상태에서 이동 시도");
         publishAlert("warn", "홈 캘리브레이션 미완료");
@@ -397,8 +559,7 @@ void handleHomeCommand() {
     _currentState = STATE_HOMING;
     publishStatus();
 
-    // Z축 먼저 홈 (안전을 위해 최하단으로)
-    switchToXMode();  // 방향 전환 초기화
+    switchToXMode();
     delay(DIR_SWITCH_DELAY);
 
     bool zOk = homeAxis(PIN_ENDSTOP_Z, _servoZL, _servoZR, Z_LIFT_DOWN, "Z");
@@ -409,7 +570,7 @@ void handleHomeCommand() {
 
     bool yOk = homeAxis(PIN_ENDSTOP_Y, _servoYL, _servoYR, MG90S_CCW, "Y");
 
-    switchToXMode();  // 초기 상태 복원 (X축 접지)
+    switchToXMode();
     delay(DIR_SWITCH_DELAY);
 
     if (xOk && yOk && zOk) {
@@ -497,83 +658,118 @@ void executeTransferSequence(int targetX, int targetY, int targetZ, const char* 
 }
 
 // ============================================================
-// 방향 전환 — 래크 앤 피니언 슬라이더
+// 방향 전환 — 래크 앤 피니언 슬라이더 (점진적 이동 적용)
 // ============================================================
 
 /**
- * @brief Y축 바퀴를 상승시켜 X축 바퀴만 접지한다. (X축 이동 모드)
- *        좌/우 MG996R 2개를 동시에 구동하여 Y축 바퀴를 균형 있게 상승시킨다.
+ * @brief Y축 바퀴를 점진적으로 상승시켜 X축 바퀴만 접지한다. (X축 이동 모드)
+ *        좌/우 MG996R 2개를 동시에 점진적으로 구동.
  */
 void switchToXMode() {
-    _servoDirL.write(DIR_ANGLE_X_MODE);
-    _servoDirR.write(DIR_ANGLE_X_MODE);
-    Serial.println("[방향전환] X축 모드 (Y축 바퀴 양측 상승)");
+    smoothServoPairMove(_servoDirL, _servoDirR,
+                        _angleDirL, _angleDirR,
+                        DIR_ANGLE_X_MODE, DIR_ANGLE_X_MODE);
+    Serial.println("[방향전환] X축 모드 (Y축 바퀴 양측 점진적 상승)");
 }
 
 /**
- * @brief Y축 바퀴를 하강시켜 Y축 바퀴를 접지한다. (Y축 이동 모드)
- *        좌/우 MG996R 2개를 동시에 구동하여 Y축 바퀴를 균형 있게 하강시킨다.
+ * @brief Y축 바퀴를 점진적으로 하강시켜 Y축 바퀴를 접지한다. (Y축 이동 모드)
+ *        좌/우 MG996R 2개를 동시에 점진적으로 구동.
  */
 void switchToYMode() {
-    _servoDirL.write(DIR_ANGLE_Y_MODE);
-    _servoDirR.write(DIR_ANGLE_Y_MODE);
-    Serial.println("[방향전환] Y축 모드 (Y축 바퀴 양측 하강)");
+    smoothServoPairMove(_servoDirL, _servoDirR,
+                        _angleDirL, _angleDirR,
+                        DIR_ANGLE_Y_MODE, DIR_ANGLE_Y_MODE);
+    Serial.println("[방향전환] Y축 모드 (Y축 바퀴 양측 점진적 하강)");
 }
 
 // ============================================================
-// 축별 이동 제어
+// 축별 이동 제어 (점진적 가감속 적용)
 // ============================================================
 
 /**
- * @brief X축으로 지정 셀 수만큼 이동한다.
- *        양수: 정방향(+X), 음수: 역방향(-X)
+ * @brief X축으로 지정 셀 수만큼 이동한다. (램프업 → 정속 → 램프다운)
  * @param cells 이동할 셀 수 (부호 포함)
  */
 void moveX(int cells) {
     int driveAngle = (cells > 0) ? MG90S_CW : MG90S_CCW;
-    unsigned long duration = abs(cells) * MOVE_TIME_PER_CELL_XY;
 
-    _servoXL.write(driveAngle);
-    _servoXR.write(driveAngle);
-    delay(duration);
-    _servoXL.write(MG90S_STOP);
-    _servoXR.write(MG90S_STOP);
+    // 램프업 시간과 램프다운 시간을 총 이동시간에서 차감
+    int rampSteps = abs(driveAngle - MG90S_STOP) / RAMP_STEP_DEG;
+    unsigned long rampTime = (unsigned long)rampSteps * RAMP_STEP_DELAY_MS;
+    unsigned long totalDuration = abs(cells) * MOVE_TIME_PER_CELL_XY;
+
+    // 정속 구간 = 총 시간 - (램프업 + 램프다운)
+    unsigned long cruiseTime = 0;
+    if (totalDuration > rampTime * 2) {
+        cruiseTime = totalDuration - rampTime * 2;
+    }
+
+    // 램프업: 정지 → 풀스피드
+    rampDrivePair(_servoXL, _servoXR, driveAngle);
+
+    // 정속 구간
+    if (cruiseTime > 0) {
+        delay(cruiseTime);
+    }
+
+    // 램프다운: 풀스피드 → 정지
+    rampStopPair(_servoXL, _servoXR, driveAngle);
 }
 
 /**
- * @brief Y축으로 지정 셀 수만큼 이동한다.
- *        양수: 정방향(+Y), 음수: 역방향(-Y)
+ * @brief Y축으로 지정 셀 수만큼 이동한다. (램프업 → 정속 → 램프다운)
  * @param cells 이동할 셀 수 (부호 포함)
  */
 void moveY(int cells) {
     int driveAngle = (cells > 0) ? MG90S_CW : MG90S_CCW;
-    unsigned long duration = abs(cells) * MOVE_TIME_PER_CELL_XY;
 
-    _servoYL.write(driveAngle);
-    _servoYR.write(driveAngle);
-    delay(duration);
-    _servoYL.write(MG90S_STOP);
-    _servoYR.write(MG90S_STOP);
+    int rampSteps = abs(driveAngle - MG90S_STOP) / RAMP_STEP_DEG;
+    unsigned long rampTime = (unsigned long)rampSteps * RAMP_STEP_DELAY_MS;
+    unsigned long totalDuration = abs(cells) * MOVE_TIME_PER_CELL_XY;
+
+    unsigned long cruiseTime = 0;
+    if (totalDuration > rampTime * 2) {
+        cruiseTime = totalDuration - rampTime * 2;
+    }
+
+    rampDrivePair(_servoYL, _servoYR, driveAngle);
+
+    if (cruiseTime > 0) {
+        delay(cruiseTime);
+    }
+
+    rampStopPair(_servoYL, _servoYR, driveAngle);
 }
 
 /**
- * @brief Z축으로 지정 층 수만큼 리프트한다. (스풀/벨트 양측 동시)
- *        양수: 상승(+Z), 음수: 하강(-Z)
+ * @brief Z축으로 지정 층 수만큼 리프트한다. (램프업 → 정속 → 램프다운)
  * @param cells 이동할 층 수 (부호 포함)
  */
 void moveZ(int cells) {
     int driveAngle = (cells > 0) ? Z_LIFT_UP : Z_LIFT_DOWN;
-    unsigned long duration = abs(cells) * MOVE_TIME_PER_CELL_Z;
 
-    _servoZL.write(driveAngle);
-    _servoZR.write(driveAngle);
-    delay(duration);
-    _servoZL.write(Z_LIFT_STOP);
-    _servoZR.write(Z_LIFT_STOP);
+    int rampSteps = abs(driveAngle - Z_LIFT_STOP) / RAMP_STEP_DEG;
+    unsigned long rampTime = (unsigned long)rampSteps * RAMP_STEP_DELAY_MS;
+    unsigned long totalDuration = abs(cells) * MOVE_TIME_PER_CELL_Z;
+
+    unsigned long cruiseTime = 0;
+    if (totalDuration > rampTime * 2) {
+        cruiseTime = totalDuration - rampTime * 2;
+    }
+
+    rampDrivePair(_servoZL, _servoZR, driveAngle);
+
+    if (cruiseTime > 0) {
+        delay(cruiseTime);
+    }
+
+    rampStopPair(_servoZL, _servoZR, driveAngle);
 }
 
 /**
- * @brief 모든 주행 서보를 정지한다. (비상 정지용)
+ * @brief 모든 주행 서보를 점진적으로 정지한다. (비상 정지용)
+ *        비상 시에는 즉시 정지 — 안전 우선
  */
 void stopAllDrive() {
     _servoXL.write(MG90S_STOP);
@@ -585,11 +781,12 @@ void stopAllDrive() {
 }
 
 // ============================================================
-// 엔드스톱 기반 홈 복귀
+// 엔드스톱 기반 홈 복귀 (점진적 가속 후 저속 접근)
 // ============================================================
 
 /**
  * @brief 엔드스톱 스위치가 눌릴 때까지 지정 축을 역방향으로 구동하여 홈 위치로 복귀한다.
+ *        점진적 가속 후 정속 → 엔드스톱 감지 시 점진적 감속 정지.
  * @param endstopPin 엔드스톱 GPIO 핀
  * @param servoL 좌측 서보
  * @param servoR 우측 서보
@@ -598,32 +795,32 @@ void stopAllDrive() {
  * @return 홈 도달 성공 여부
  */
 bool homeAxis(int endstopPin, Servo& servoL, Servo& servoR, int driveAngle, const char* axisName) {
-    Serial.printf("[홈] %s축 홈 복귀 시작\n", axisName);
+    Serial.printf("[홈] %s축 홈 복귀 시작 (점진적)\n", axisName);
 
-    unsigned long timeout = 15000;  // 최대 15초
+    unsigned long timeout = 15000;
     unsigned long startTime = millis();
 
-    servoL.write(driveAngle);
-    servoR.write(driveAngle);
+    // 점진적 가속으로 구동 시작
+    rampDrivePair(servoL, servoR, driveAngle);
 
     while (digitalRead(endstopPin) == HIGH) {
         if (millis() - startTime > timeout) {
-            servoL.write(MG90S_STOP);
-            servoR.write(MG90S_STOP);
+            // 타임아웃 시 점진적 감속 정지
+            rampStopPair(servoL, servoR, driveAngle);
             Serial.printf("[홈] %s축 타임아웃 — 엔드스톱 미감지\n", axisName);
             return false;
         }
         delay(10);
     }
 
-    servoL.write(MG90S_STOP);
-    servoR.write(MG90S_STOP);
+    // 엔드스톱 감지 → 점진적 감속 정지
+    rampStopPair(servoL, servoR, driveAngle);
     Serial.printf("[홈] %s축 홈 도달\n", axisName);
     return true;
 }
 
 // ============================================================
-// 상태 발행 — 설계 문서 warehouse/status/shuttle 페이로드
+// 상태 발행
 // ============================================================
 
 /**
