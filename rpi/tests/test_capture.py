@@ -32,7 +32,6 @@ def test_single_capture():
     logger.info("=" * 50)
     logger.info("테스트: 정지 이미지 촬영")
     logger.info("해상도: %dx%d", config.CAPTURE_WIDTH, config.CAPTURE_HEIGHT)
-    logger.info("LensPosition: %.1f", config.LENS_POSITION)
     logger.info("=" * 50)
 
     try:
@@ -50,18 +49,19 @@ def test_single_capture():
 
 
 def test_multi_capture(count: int = 3):
-    """연속 촬영 테스트 (파라미터 비교용)"""
+    """연속 촬영 테스트 (노출값 비교용)"""
     logger.info("=" * 50)
-    logger.info("테스트: 연속 %d회 촬영", count)
+    logger.info("테스트: 연속 %d회 촬영 (노출값 비교)", count)
     logger.info("=" * 50)
 
-    lens_positions = [2.0, 4.0, 6.0]  # 근접 거리 비교: 멀리 / 중간 / 가깝게
+    # IMX219는 고정 초점 → LensPosition 대신 ExposureTime으로 비교
+    exposure_times = [10000, 20000, 40000]  # 10ms / 20ms / 40ms
 
-    for i, lp in enumerate(lens_positions[:count], 1):
-        config.LENS_POSITION = lp
-        logger.info("[%d/%d] LensPosition=%.1f 촬영 중...", i, count, lp)
+    for i, et in enumerate(exposure_times[:count], 1):
+        config.EXPOSURE_TIME = et
+        logger.info("[%d/%d] ExposureTime=%dμs 촬영 중...", i, count, et)
         try:
-            path = capture.capture_image(prefix=f"lens_{lp:.1f}")
+            path = capture.capture_image(prefix=f"exp_{et}")
             size = os.path.getsize(path) / 1024
             logger.info("   → 저장: %s (%.1f KB)", Path(path).name, size)
         except Exception as e:
@@ -79,7 +79,7 @@ if __name__ == "__main__":
         "--mode",
         choices=["single", "multi"],
         default="single",
-        help="single: 단일 촬영 / multi: LensPosition 비교 촬영",
+        help="single: 단일 촬영 / multi: 노출값 비교 촬영",
     )
     parser.add_argument(
         "--width",
@@ -93,18 +93,11 @@ if __name__ == "__main__":
         default=config.CAPTURE_HEIGHT,
         help="촬영 해상도 - 세로 (px)",
     )
-    parser.add_argument(
-        "--lens",
-        type=float,
-        default=config.LENS_POSITION,
-        help="LensPosition (0.0=무한원 ~ 10.0=최근접)",
-    )
     args = parser.parse_args()
 
     # 매개변수를 config에 반영
     config.CAPTURE_WIDTH  = args.width
     config.CAPTURE_HEIGHT = args.height
-    config.LENS_POSITION  = args.lens
 
     if args.mode == "single":
         test_single_capture()

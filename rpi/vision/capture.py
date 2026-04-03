@@ -62,10 +62,8 @@ def capture_image(filename: str | None = None, prefix: str = "capture") -> str:
         )
         cam.configure(still_cfg)
 
-        # 근접 촬영 파라미터 적용
+        # 촬영 파라미터 적용
         cam.set_controls({
-            "AfMode":       config.AF_MODE,
-            "LensPosition": config.LENS_POSITION,
             "AwbMode":      controls.AwbModeEnum.__members__.get(
                                 config.AWB_MODE.capitalize(), controls.AwbModeEnum.Indoor
                             ),
