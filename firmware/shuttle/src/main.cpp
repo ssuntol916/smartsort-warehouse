@@ -495,13 +495,55 @@ void onMqttMessage(char* topic, byte* payload, unsigned int length) {
         }
 
         if (strcmp(action, "servo_direct") == 0) {
-            int pin = doc["pin"] | -1;
             int angle = doc["angle"] | -1;
-            if (pin == PIN_DIR_LEFT && angle >= 0 && angle <= 180) {
-                // servo_direct도 점진적 이동 적용
+            if (angle < 0 || angle > 180) {
+                publishAlert("error", "angle 범위 오류 (0~180)");
+                return;
+            }
+
+            // pin이 배열인지 단일값인지 판별
+            JsonVariant pinVar = doc["pin"];
+
+            if (pinVar.is<JsonArray>()) {
+                JsonArray pins = pinVar.as<JsonArray>();
+
+                // 핀 2개 + 방향전환 쌍(13,15)인 경우 → 동기 점진 이동
+                if (pins.size() == 2) {
+                    int p1 = pins[0] | -1;
+                    int p2 = pins[1] | -1;
+
+                    bool isDirPair = (p1 == PIN_DIR_LEFT && p2 == PIN_DIR_RIGHT) ||
+                                    (p1 == PIN_DIR_RIGHT && p2 == PIN_DIR_LEFT);
+
+                    if (isDirPair) {
+                        smoothServoPairMove(_servoDirL, _servoDirR,
+                                            _angleDirL, _angleDirR,
+                                            angle, angle);
+                        Serial.printf("[서보직접] 방향전환 쌍(13,15) → %d° (sync smooth)\n", angle);
+                        publishStatus();
+                        return;
+                    }
+
+                    publishAlert("error", "지원하지 않는 핀 쌍");
+                    return;
+                }
+
+                publishAlert("error", "pin 배열 크기 오류 (2개만 지원)");
+                return;
+            }
+
+            // 단일 핀 (기존 동작 유지)
+            int pin = pinVar | -1;
+            if (pin == PIN_DIR_LEFT) {
                 smoothServoMove(_servoDirL, _angleDirL, angle);
                 Serial.printf("[서보직접] 핀 %d → %d° (smooth)\n", pin, angle);
                 publishStatus();
+            } else if (pin == PIN_DIR_RIGHT) {
+                smoothServoMove(_servoDirR, _angleDirR, angle);
+                Serial.printf("[서보직접] 핀 %d → %d° (smooth)\n", pin, angle);
+                publishStatus();
+            } else {
+                publishAlert("error", "지원하지 않는 핀 번호");
             }
             return;
         }
