@@ -2,7 +2,8 @@
     "name": "SmartSortScripts",
     "rootNamespace": "",
     "references": [
-        "SmartSortConfig"
+        "SmartSortConfig",
+        "Unity.TextMeshPro"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
