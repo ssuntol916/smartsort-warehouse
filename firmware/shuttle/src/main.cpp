@@ -4,6 +4,7 @@
 // 작성자  : 송준호
 // 작성일  : 2026-03-27
 // 수정이력 : 2026-04-01 — 서보모터 점진적 이동(smooth move) 적용
+//           2026-04-10 — X, Y축 µs 캘리브레이션 보정 적용
 // ============================================================
 
 #include <Arduino.h>
@@ -12,6 +13,28 @@
 #include <ArduinoJson.h>
 #include <ESP32Servo.h>
 #include "secrets.h"
+
+// MG90S 개체별 정지점 (µs) — 캘리브레이션 후 측정값으로 교체
+const int STOP_US_X_LEFT  = 1500;
+const int STOP_US_X_RIGHT = 1500;
+const int STOP_US_Y_LEFT  = 1500;
+const int STOP_US_Y_RIGHT = 1500;
+
+// X축 캘리브레이션 펄스 (µs) — 실측값
+const int X_FWD_US_L = 1750;   // 전진 좌측
+const int X_FWD_US_R = 1220;   // 전진 우측
+const int X_REV_US_L = 1200;   // 후진 좌측
+const int X_REV_US_R = 1870;   // 후진 우측
+
+// Y축 캘리브레이션 펄스 (µs) — 실측값
+const int Y_FWD_US_L = 1750;   // 전진 좌측
+const int Y_FWD_US_R = 1220;   // 전진 우측
+const int Y_REV_US_L = 1200;   // 후진 좌측
+const int Y_REV_US_R = 1870;   // 후진 우측
+
+// µs 기반 램프 설정
+const int RAMP_US_STEP     = 25;   // 1스텝당 µs 변화량
+const int RAMP_US_DELAY_MS = 20;   // 스텝 간 대기시간
 
 // ============================================================
 // MQTT 설정
@@ -179,6 +202,10 @@ void smoothServoPairMove(Servo& servoL, Servo& servoR,
                          int targetAngleL, int targetAngleR);
 void rampDrivePair(Servo& servoL, Servo& servoR, int targetAngle);
 void rampStopPair(Servo& servoL, Servo& servoR, int currentDriveAngle);
+void rampDrivePairUs(Servo& servoL, Servo& servoR,
+                     int stopL, int stopR, int targetL, int targetR);
+void rampStopPairUs(Servo& servoL, Servo& servoR,
+                    int currentL, int currentR, int stopL, int stopR);
 
 // ============================================================
 // 점진적 이동 구현 — 위치 서보용 (방향 전환 MG996R)
@@ -312,6 +339,49 @@ void rampStopPair(Servo& servoL, Servo& servoR, int currentDriveAngle) {
         servoL.write(current);
         servoR.write(current);
         delay(RAMP_STEP_DELAY_MS);
+    }
+}
+
+// ============================================================
+// µs 기반 점진적 가감속 — 좌/우 독립 오프셋 지원
+// ============================================================
+
+/**
+ * @brief 정지 펄스에서 목표 펄스까지 좌/우 서보를 비례 동기 가속한다.
+ *        오프셋이 큰 쪽 기준으로 스텝 수를 결정하고, 작은 쪽은 비례 보간.
+ */
+void rampDrivePairUs(Servo& servoL, Servo& servoR,
+                     int stopL, int stopR,
+                     int targetL, int targetR) {
+    int maxOffset = max(abs(targetL - stopL), abs(targetR - stopR));
+    int steps = maxOffset / RAMP_US_STEP;
+    if (steps < 1) steps = 1;
+
+    for (int i = 1; i <= steps; i++) {
+        int pulseL = stopL + (long)(targetL - stopL) * i / steps;
+        int pulseR = stopR + (long)(targetR - stopR) * i / steps;
+        servoL.writeMicroseconds(pulseL);
+        servoR.writeMicroseconds(pulseR);
+        delay(RAMP_US_DELAY_MS);
+    }
+}
+
+/**
+ * @brief 현재 구동 펄스에서 정지 펄스까지 좌/우 서보를 비례 동기 감속한다.
+ */
+void rampStopPairUs(Servo& servoL, Servo& servoR,
+                    int currentL, int currentR,
+                    int stopL, int stopR) {
+    int maxOffset = max(abs(stopL - currentL), abs(stopR - currentR));
+    int steps = maxOffset / RAMP_US_STEP;
+    if (steps < 1) steps = 1;
+
+    for (int i = 1; i <= steps; i++) {
+        int pulseL = currentL + (long)(stopL - currentL) * i / steps;
+        int pulseR = currentR + (long)(stopR - currentR) * i / steps;
+        servoL.writeMicroseconds(pulseL);
+        servoR.writeMicroseconds(pulseR);
+        delay(RAMP_US_DELAY_MS);
     }
 }
 
@@ -547,6 +617,198 @@ void onMqttMessage(char* topic, byte* payload, unsigned int length) {
             }
             return;
         }
+
+        if (strcmp(action, "drive_direct") == 0) {
+            const char* axis = doc["axis"] | "";
+            JsonVariant angleVar = doc["angle"];
+            unsigned long durationMs = doc["duration_ms"] | 0UL;
+
+            if (durationMs == 0) {
+                publishAlert("error", "duration_ms 필수");
+                return;
+            }
+
+            Servo* servoL = nullptr;
+            Servo* servoR = nullptr;
+            int stopAngle = MG90S_STOP;
+
+            if (strcmp(axis, "x") == 0) {
+                servoL = &_servoXL;
+                servoR = &_servoXR;
+            } else if (strcmp(axis, "y") == 0) {
+                servoL = &_servoYL;
+                servoR = &_servoYR;
+            } else if (strcmp(axis, "z") == 0) {
+                servoL = &_servoZL;
+                servoR = &_servoZR;
+                stopAngle = Z_LIFT_STOP;
+            } else {
+                publishAlert("error", "axis 오류 (x/y/z)");
+                return;
+            }
+
+            int angleL, angleR;
+            if (angleVar.is<JsonArray>()) {
+                JsonArray angles = angleVar.as<JsonArray>();
+                if (angles.size() != 2) {
+                    publishAlert("error", "angle 배열 크기 오류 (2개)");
+                    return;
+                }
+                angleL = angles[0] | -1;
+                angleR = angles[1] | -1;
+            } else {
+                int a = angleVar | -1;
+                angleL = a;
+                angleR = a;
+            }
+
+            if (angleL < 0 || angleL > 180 || angleR < 0 || angleR > 180) {
+                publishAlert("error", "angle 범위 오류 (0~180)");
+                return;
+            }
+
+            Serial.printf("[주행직접] axis=%s L:%d° R:%d° %lums\n",
+                        axis, angleL, angleR, durationMs);
+
+            // X축: 캘리브레이션 µs 값 적용
+            if (strcmp(axis, "x") == 0) {
+                int usL, usR;
+                if (angleL < MG90S_STOP) {        // 정방향 (0°)
+                    usL = X_FWD_US_L;
+                    usR = X_FWD_US_R;
+                } else if (angleL > MG90S_STOP) { // 역방향 (180°)
+                    usL = X_REV_US_L;
+                    usR = X_REV_US_R;
+                } else {                           // 정지 (90°)
+                    usL = STOP_US_X_LEFT;
+                    usR = STOP_US_X_RIGHT;
+                }
+
+                rampDrivePairUs(_servoXL, _servoXR,
+                                STOP_US_X_LEFT, STOP_US_X_RIGHT, usL, usR);
+
+                unsigned long startMs = millis();
+                while (millis() - startMs < durationMs) {
+                    _mqttClient.loop();
+                    delay(10);
+                }
+
+                rampStopPairUs(_servoXL, _servoXR,
+                               usL, usR, STOP_US_X_LEFT, STOP_US_X_RIGHT);
+            } else if (strcmp(axis, "y") == 0) {
+                int usL, usR;
+                if (angleL < MG90S_STOP) {
+                    usL = Y_FWD_US_L;
+                    usR = Y_FWD_US_R;
+                } else if (angleL > MG90S_STOP) {
+                    usL = Y_REV_US_L;
+                    usR = Y_REV_US_R;
+                } else {
+                    usL = STOP_US_Y_LEFT;
+                    usR = STOP_US_Y_RIGHT;
+                }
+
+                rampDrivePairUs(_servoYL, _servoYR,
+                                STOP_US_Y_LEFT, STOP_US_Y_RIGHT, usL, usR);
+
+                unsigned long startMs = millis();
+                while (millis() - startMs < durationMs) {
+                    _mqttClient.loop();
+                    delay(10);
+                }
+
+                rampStopPairUs(_servoYL, _servoYR,
+                               usL, usR, STOP_US_Y_LEFT, STOP_US_Y_RIGHT);
+            } else {
+                // Z축: 기존 동작 유지
+                servoL->write(angleL);
+                servoR->write(angleR);
+
+                unsigned long startMs = millis();
+                while (millis() - startMs < durationMs) {
+                    _mqttClient.loop();
+                    delay(10);
+                }
+
+                servoL->write(stopAngle);
+                servoR->write(stopAngle);
+            }
+
+            publishStatus();
+            return;
+        }
+
+        if (strcmp(action, "drive_direct_us") == 0) {
+            const char* axis = doc["axis"] | "";
+            JsonVariant pulseVar = doc["pulse"];
+            unsigned long durationMs = doc["duration_ms"] | 0UL;
+
+            if (durationMs == 0) {
+                publishAlert("error", "duration_ms 필수");
+                return;
+            }
+
+            Servo* servoL = nullptr;
+            Servo* servoR = nullptr;
+            int stopPulseL = 1500;
+            int stopPulseR = 1500;
+
+            if (strcmp(axis, "x") == 0) {
+                servoL = &_servoXL;
+                servoR = &_servoXR;
+                stopPulseL = STOP_US_X_LEFT;
+                stopPulseR = STOP_US_X_RIGHT;
+            } else if (strcmp(axis, "y") == 0) {
+                servoL = &_servoYL;
+                servoR = &_servoYR;
+                stopPulseL = STOP_US_Y_LEFT;
+                stopPulseR = STOP_US_Y_RIGHT;
+            } else if (strcmp(axis, "z") == 0) {
+                servoL = &_servoZL;
+                servoR = &_servoZR;
+            } else {
+                publishAlert("error", "axis 오류 (x/y/z)");
+                return;
+            }
+
+            int pulseL, pulseR;
+            if (pulseVar.is<JsonArray>()) {
+                JsonArray pulses = pulseVar.as<JsonArray>();
+                if (pulses.size() != 2) {
+                    publishAlert("error", "pulse 배열 크기 오류 (2개)");
+                    return;
+                }
+                pulseL = pulses[0] | -1;
+                pulseR = pulses[1] | -1;
+            } else {
+                int p = pulseVar | -1;
+                pulseL = p;
+                pulseR = p;
+            }
+
+            if (pulseL < 1000 || pulseL > 2000 || pulseR < 1000 || pulseR > 2000) {
+                publishAlert("error", "pulse 범위 오류 (1000~2000us)");
+                return;
+            }
+
+            Serial.printf("[주행직접us] axis=%s L:%dus R:%dus %lums\n",
+                        axis, pulseL, pulseR, durationMs);
+
+            servoL->writeMicroseconds(pulseL);
+            servoR->writeMicroseconds(pulseR);
+
+            unsigned long startMs = millis();
+            while (millis() - startMs < durationMs) {
+                _mqttClient.loop();
+                delay(10);
+            }
+
+            servoL->writeMicroseconds(stopPulseL);
+            servoR->writeMicroseconds(stopPulseR);
+
+            publishStatus();
+            return;
+        }
     }
 
     handleMoveCommand(doc);
@@ -730,44 +992,71 @@ void switchToYMode() {
 // ============================================================
 
 /**
- * @brief X축으로 지정 셀 수만큼 이동한다. (램프업 → 정속 → 램프다운)
- * @param cells 이동할 셀 수 (부호 포함)
+ * @brief X축으로 지정 셀 수만큼 이동한다. (µs 기반 캘리브레이션 적용)
+ *        좌/우 독립 오프셋으로 직진성 보정.
+ * @param cells 이동할 셀 수 (양수=전진, 음수=후진)
  */
 void moveX(int cells) {
-    int driveAngle = (cells > 0) ? MG90S_CW : MG90S_CCW;
+    int targetL, targetR;
 
-    // 램프업 시간과 램프다운 시간을 총 이동시간에서 차감
-    int rampSteps = abs(driveAngle - MG90S_STOP) / RAMP_STEP_DEG;
-    unsigned long rampTime = (unsigned long)rampSteps * RAMP_STEP_DELAY_MS;
+    if (cells > 0) {
+        targetL = X_FWD_US_L;
+        targetR = X_FWD_US_R;
+    } else {
+        targetL = X_REV_US_L;
+        targetR = X_REV_US_R;
+    }
+
+    int stopL = STOP_US_X_LEFT;
+    int stopR = STOP_US_X_RIGHT;
+
+    // 램프 시간 계산
+    int maxOffset = max(abs(targetL - stopL), abs(targetR - stopR));
+    int rampSteps = maxOffset / RAMP_US_STEP;
+    unsigned long rampTime = (unsigned long)rampSteps * RAMP_US_DELAY_MS;
     unsigned long totalDuration = abs(cells) * MOVE_TIME_PER_CELL_XY;
 
-    // 정속 구간 = 총 시간 - (램프업 + 램프다운)
     unsigned long cruiseTime = 0;
     if (totalDuration > rampTime * 2) {
         cruiseTime = totalDuration - rampTime * 2;
     }
 
-    // 램프업: 정지 → 풀스피드
-    rampDrivePair(_servoXL, _servoXR, driveAngle);
+    // 램프업 → 정속 → 램프다운
+    rampDrivePairUs(_servoXL, _servoXR, stopL, stopR, targetL, targetR);
 
-    // 정속 구간
     if (cruiseTime > 0) {
-        delay(cruiseTime);
+        unsigned long startMs = millis();
+        while (millis() - startMs < cruiseTime) {
+            _mqttClient.loop();
+            delay(10);
+        }
     }
 
-    // 램프다운: 풀스피드 → 정지
-    rampStopPair(_servoXL, _servoXR, driveAngle);
+    rampStopPairUs(_servoXL, _servoXR, targetL, targetR, stopL, stopR);
 }
 
 /**
- * @brief Y축으로 지정 셀 수만큼 이동한다. (램프업 → 정속 → 램프다운)
- * @param cells 이동할 셀 수 (부호 포함)
+ * @brief Y축으로 지정 셀 수만큼 이동한다. (µs 기반 캘리브레이션 적용)
+ *        좌/우 독립 오프셋으로 직진성 보정.
+ * @param cells 이동할 셀 수 (양수=전진, 음수=후진)
  */
 void moveY(int cells) {
-    int driveAngle = (cells > 0) ? MG90S_CW : MG90S_CCW;
+    int targetL, targetR;
 
-    int rampSteps = abs(driveAngle - MG90S_STOP) / RAMP_STEP_DEG;
-    unsigned long rampTime = (unsigned long)rampSteps * RAMP_STEP_DELAY_MS;
+    if (cells > 0) {
+        targetL = Y_FWD_US_L;
+        targetR = Y_FWD_US_R;
+    } else {
+        targetL = Y_REV_US_L;
+        targetR = Y_REV_US_R;
+    }
+
+    int stopL = STOP_US_Y_LEFT;
+    int stopR = STOP_US_Y_RIGHT;
+
+    int maxOffset = max(abs(targetL - stopL), abs(targetR - stopR));
+    int rampSteps = maxOffset / RAMP_US_STEP;
+    unsigned long rampTime = (unsigned long)rampSteps * RAMP_US_DELAY_MS;
     unsigned long totalDuration = abs(cells) * MOVE_TIME_PER_CELL_XY;
 
     unsigned long cruiseTime = 0;
@@ -775,13 +1064,17 @@ void moveY(int cells) {
         cruiseTime = totalDuration - rampTime * 2;
     }
 
-    rampDrivePair(_servoYL, _servoYR, driveAngle);
+    rampDrivePairUs(_servoYL, _servoYR, stopL, stopR, targetL, targetR);
 
     if (cruiseTime > 0) {
-        delay(cruiseTime);
+        unsigned long startMs = millis();
+        while (millis() - startMs < cruiseTime) {
+            _mqttClient.loop();
+            delay(10);
+        }
     }
 
-    rampStopPair(_servoYL, _servoYR, driveAngle);
+    rampStopPairUs(_servoYL, _servoYR, targetL, targetR, stopL, stopR);
 }
 
 /**
