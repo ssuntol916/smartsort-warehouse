@@ -29,7 +29,7 @@
         <mxCell id="jNB03AXAIPHNmWj40ZpM-3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;" value="ESP32 #1&lt;div&gt;컨베이어&lt;/div&gt;" vertex="1">
           <mxGeometry height="60" width="120" x="230" y="450" as="geometry" />
         </mxCell>
-        <mxCell id="jNB03AXAIPHNmWj40ZpM-5" parent="1" style="rounded=1;whiteSpace=wrap;html=1;" value="Backend 서버&lt;br&gt;(Supabase)" vertex="1">
+        <mxCell id="jNB03AXAIPHNmWj40ZpM-5" parent="1" style="rounded=1;whiteSpace=wrap;html=1;" value="Pi 5 서버&lt;br&gt;(PG + llama)" vertex="1">
           <mxGeometry height="60" width="120" x="514" y="255" as="geometry" />
         </mxCell>
         <mxCell id="kJ4x5LBkjULDZvUKDs2n-19" edge="1" parent="1" source="jNB03AXAIPHNmWj40ZpM-7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.75;exitDx=0;exitDy=0;entryX=1;entryY=0.75;entryDx=0;entryDy=0;" target="jNB03AXAIPHNmWj40ZpM-9">
@@ -85,7 +85,7 @@
             <mxPoint y="-1" as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="jNB03AXAIPHNmWj40ZpM-9" parent="1" style="rounded=1;whiteSpace=wrap;html=1;" value="MQTT 브로커&lt;br&gt;(RPI Zero 2W)" vertex="1">
+        <mxCell id="jNB03AXAIPHNmWj40ZpM-9" parent="1" style="rounded=1;whiteSpace=wrap;html=1;" value="MQTT 브로커&lt;br&gt;(Pi 5 : Mosquitto)" vertex="1">
           <mxGeometry height="60" width="120" x="350" y="355" as="geometry" />
         </mxCell>
         <mxCell id="kJ4x5LBkjULDZvUKDs2n-10" edge="1" parent="1" source="jNB03AXAIPHNmWj40ZpM-13" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" target="jNB03AXAIPHNmWj40ZpM-9">
