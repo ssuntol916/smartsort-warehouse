@@ -141,3 +141,6 @@ InitTestScene*.unity*
 # ============================================================
 /[Aa]ssets/Models/
 /[Aa]ssets/Materials/Textures
+
+# 솔루션 파일
+*.slnx
