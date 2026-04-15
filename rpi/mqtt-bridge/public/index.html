@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SmartSort MQTT Dashboard</title>
+  <script src="https://unpkg.com/mqtt@5.3.4/dist/mqtt.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #242834;
+      --border: #2e3345;
+      --text: #e4e6f0;
+      --text-dim: #8b8fa3;
+      --accent: #6c5ce7;
+      --accent-glow: rgba(108, 92, 231, 0.25);
+      --green: #00b894;
+      --green-glow: rgba(0, 184, 148, 0.2);
+      --red: #e17055;
+      --orange: #fdcb6e;
+      --blue: #74b9ff;
+      --radius: 12px;
+      --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      --mono: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
+    }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Header ── */
+    header {
+      background: linear-gradient(135deg, var(--surface) 0%, var(--surface2) 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(12px);
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    .logo-icon {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, var(--accent), var(--blue));
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+    }
+
+    .status-badge {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.3s;
+    }
+
+    .status-badge.connected {
+      background: var(--green-glow);
+      color: var(--green);
+      border: 1px solid rgba(0,184,148,0.3);
+    }
+
+    .status-badge.disconnected {
+      background: rgba(225,112,85,0.15);
+      color: var(--red);
+      border: 1px solid rgba(225,112,85,0.3);
+    }
+
+    .status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    .connected .status-dot { background: var(--green); }
+    .disconnected .status-dot { background: var(--red); animation: none; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    /* ── Layout ── */
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+
+    @media (max-width: 768px) {
+      .container { grid-template-columns: 1fr; padding: 16px; }
+    }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+
+    .card:hover { border-color: rgba(108, 92, 231, 0.3); }
+
+    .card-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-weight: 600;
+      font-size: 15px;
+    }
+
+    .card-header .icon { margin-right: 8px; }
+
+    .card-body { padding: 20px; }
+
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+
+    label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    input, select, textarea {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+
+    textarea {
+      font-family: var(--mono);
+      font-size: 13px;
+      resize: vertical;
+      min-height: 80px;
+    }
+
+    /* ── Buttons ── */
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      font-family: var(--font);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), #7c6cf0);
+      color: white;
+      box-shadow: 0 2px 8px var(--accent-glow);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 16px var(--accent-glow);
+    }
+
+    .btn-outline {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+    }
+
+    .btn-outline:hover { border-color: var(--accent); color: var(--text); }
+
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    .btn-sm { padding: 6px 12px; font-size: 12px; }
+
+    /* ── Publish Panel ── */
+    .publish-form { display: flex; flex-direction: column; gap: 14px; }
+
+    .publish-row {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 12px;
+      align-items: end;
+    }
+
+    .qos-select { width: 80px; }
+
+    .retain-toggle {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 0;
+      font-size: 13px;
+      color: var(--text-dim);
+      cursor: pointer;
+    }
+
+    .retain-toggle input[type="checkbox"] {
+      width: 16px; height: 16px;
+      accent-color: var(--accent);
+    }
+
+    /* ── Message Log ── */
+    .message-log-wrapper {
+      grid-column: 1 / -1;
+    }
+
+    .log-controls {
+      display: flex; gap: 8px; align-items: center;
+    }
+
+    .log-filter {
+      padding: 6px 10px;
+      font-size: 12px;
+      width: 180px;
+    }
+
+    .message-log {
+      max-height: 420px;
+      overflow-y: auto;
+      padding: 4px 0;
+    }
+
+    .message-log::-webkit-scrollbar { width: 6px; }
+    .message-log::-webkit-scrollbar-track { background: transparent; }
+    .message-log::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 3px;
+    }
+
+    .log-entry {
+      padding: 10px 16px;
+      border-bottom: 1px solid rgba(46,51,69,0.5);
+      font-size: 13px;
+      animation: fadeIn 0.3s ease;
+      transition: background 0.15s;
+    }
+
+    .log-entry:hover { background: var(--surface2); }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .log-meta {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 4px;
+    }
+
+    .log-dir {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .log-dir.pub { background: rgba(108,92,231,0.2); color: var(--accent); }
+    .log-dir.recv { background: var(--green-glow); color: var(--green); }
+
+    .log-topic {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--blue);
+    }
+
+    .log-time {
+      margin-left: auto;
+      font-size: 11px;
+      color: var(--text-dim);
+      font-family: var(--mono);
+    }
+
+    .log-payload {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text-dim);
+      padding: 6px 10px;
+      background: var(--bg);
+      border-radius: 6px;
+      margin-top: 6px;
+      word-break: break-all;
+      white-space: pre-wrap;
+      max-height: 120px;
+      overflow-y: auto;
+    }
+
+    .log-empty {
+      padding: 40px;
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 14px;
+    }
+
+    /* ── Tabs ── */
+    .tabs {
+      display: flex;
+      gap: 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .tab-btn {
+      padding: 12px 24px;
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--text-dim);
+      font-family: var(--font);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .tab-btn:hover { color: var(--text); background: var(--surface2); }
+
+    .tab-btn.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+      background: var(--surface2);
+    }
+
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ── Quick Publish Presets ── */
+    .presets {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .preset-chip {
+      padding: 5px 12px;
+      font-size: 12px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      color: var(--text-dim);
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: var(--mono);
+    }
+
+    .preset-chip:hover {
+      border-color: var(--accent);
+      color: var(--text);
+      background: var(--accent-glow);
+    }
+
+    /* ── Stats Bar ── */
+    .stats-bar {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+
+    @media (max-width: 768px) {
+      .stats-bar { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 600;
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      font-family: var(--mono);
+    }
+
+    .stat-value.green { color: var(--green); }
+    .stat-value.blue { color: var(--blue); }
+    .stat-value.orange { color: var(--orange); }
+    .stat-value.accent { color: var(--accent); }
+
+    /* ── Connected Clients ── */
+    .clients-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .client-chip {
+      padding: 4px 12px;
+      font-size: 12px;
+      font-family: var(--mono);
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      color: var(--green);
+    }
+
+    .clients-empty {
+      color: var(--text-dim);
+      font-size: 13px;
+      margin-top: 8px;
+    }
+
+    /* ── Toast ── */
+    .toast-container {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .toast {
+      padding: 12px 20px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 500;
+      animation: slideIn 0.3s ease, fadeOut 0.3s ease 2.7s;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    }
+
+    .toast.success { background: var(--green); color: white; }
+    .toast.error { background: var(--red); color: white; }
+    .toast.info { background: var(--accent); color: white; }
+
+    @keyframes slideIn {
+      from { transform: translateX(100px); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+
+    @keyframes fadeOut {
+      from { opacity: 1; }
+      to { opacity: 0; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">⚡</div>
+    SmartSort MQTT Broker
+  </div>
+  <div id="statusBadge" class="status-badge disconnected">
+    <div class="status-dot"></div>
+    <span id="statusText">브로커 연결 중...</span>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Stats Bar -->
+  <div class="stats-bar">
+    <div class="stat-card">
+      <div class="stat-label">연결 클라이언트</div>
+      <div id="statClients" class="stat-value green">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">브로커 메시지</div>
+      <div id="statReceived" class="stat-value blue">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">웹 발행</div>
+      <div id="statPublished" class="stat-value accent">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">브로커 업타임</div>
+      <div id="statUptime" class="stat-value orange">0s</div>
+    </div>
+  </div>
+
+  <!-- Publish -->
+  <div class="card" style="grid-column: 1 / -1;">
+    <div class="card-header">
+      <span><span class="icon">📤</span>메시지 발행</span>
+      <span style="font-size:12px; color: var(--text-dim);">Ctrl+Enter 빠른 발행</span>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab('shuttle')">🚐 셔틀</button>
+      <button class="tab-btn" onclick="switchTab('conveyor')">🏭 컨베이어</button>
+    </div>
+
+    <!-- Shuttle Tab -->
+    <div id="tab-shuttle" class="tab-panel active">
+      <div class="card-body">
+        <div style="margin-bottom:12px; font-size:12px; color:var(--text-dim);">토픽: <code style="color:var(--blue);">warehouse/cmd/shuttle</code></div>
+
+        <label style="margin-bottom:8px; display:block;">이동 명령</label>
+        <div class="presets">
+          <button class="preset-chip" onclick="applyPreset('warehouse/cmd/shuttle', '{&quot;target_x&quot;:0,&quot;target_y&quot;:0,&quot;target_z&quot;:0,&quot;bin_id&quot;:&quot;B-001&quot;}')">원점 (0,0,0)</button>
+          <button class="preset-chip" onclick="applyPreset('warehouse/cmd/shuttle', '{&quot;target_x&quot;:1,&quot;target_y&quot;:1,&quot;target_z&quot;:1,&quot;bin_id&quot;:&quot;B-011&quot;}')">중앙 (1,1,1)</button>
+          <button class="preset-chip" onclick="applyPreset('warehouse/cmd/shuttle', '{&quot;target_x&quot;:2,&quot;target_y&quot;:2,&quot;target_z&quot;:2,&quot;bin_id&quot;:&quot;B-022&quot;}')">끝점 (2,2,2)</button>
+          <button class="preset-chip" onclick="applyPreset('warehouse/cmd/shuttle', '{&quot;action&quot;:&quot;home&quot;}')">홈 캘리브레이션</button>
+        </div>
+
+        <label style="margin-bottom:8px; margin-top:16px; display:block;">drive_direct (축별 직접 구동)</label>
+        <div class="presets">
+          <button class="preset-chip" onclick="applyPreset('warehouse/cmd/shuttle', '{&quot;action&quot;:&quot;drive_direct&quot;,&quot;axis&quot;:&quot;x&quot;,&quot;angle&quot;:[0,180],&quot;duration_ms&quot;:2000}')">X 전진 2s</button>
+          <button class="preset-chip" onclick="applyPreset('warehouse/cmd/shuttle', '{&quot;action&quot;:&quot;drive_direct&quot;,&quot;axis&quot;:&quot;x&quot;,&quot;angle&quot;:[180,0],&quot;duration_ms&quot;:2000}')">X 후진 2s</button>
+          <button class="preset-chip" onclick="applyPreset('warehouse/cmd/shuttle', '{&quot;action&quot;:&quot;drive_direct&quot;,&quot;axis&quot;:&quot;y&quot;,&quot;angle&quot;:[0,180],&quot;duration_ms&quot;:2000}')">Y 전진 2s</button>
+          <button class="preset-chip" onclick="applyPreset('warehouse/cmd/shuttle', '{&quot;action&quot;:&quot;drive_direct&quot;,&quot;axis&quot;:&quot;y&quot;,&quot;angle&quot;:[180,0],&quot;duration_ms&quot;:2000}')">Y 후진 2s</button>
+          <button class="preset-chip" onclick="applyPreset('warehouse/cmd/shuttle', '{&quot;action&quot;:&quot;drive_direct&quot;,&quot;axis&quot;:&quot;z&quot;,&quot;angle&quot;:0,&quot;duration_ms&quot;:2000}')">Z 상승 2s</button>
+          <button class="preset-chip" onclick="applyPreset('warehouse/cmd/shuttle', '{&quot;action&quot;:&quot;drive_direct&quot;,&quot;axis&quot;:&quot;z&quot;,&quot;angle&quot;:180,&quot;duration_ms&quot;:2000}')">Z 하강 2s</button>
+        </div>
+
+        <label style="margin-bottom:8px; margin-top:16px; display:block;">servo_direct (서보 직접 제어)</label>
+        <div class="presets">
+          <button class="preset-chip" onclick="applyPreset('warehouse/cmd/shuttle', '{&quot;action&quot;:&quot;servo_direct&quot;,&quot;pin&quot;:[13,15],&quot;angle&quot;:0}')">방향전환 X모드</button>
+          <button class="preset-chip" onclick="applyPreset('warehouse/cmd/shuttle', '{&quot;action&quot;:&quot;servo_direct&quot;,&quot;pin&quot;:[13,15],&quot;angle&quot;:180}')">방향전환 Y모드</button>
+          <button class="preset-chip" onclick="applyPreset('warehouse/cmd/shuttle', '{&quot;action&quot;:&quot;servo_direct&quot;,&quot;pin&quot;:14,&quot;angle&quot;:90}')">X좌 정지(90)</button>
+          <button class="preset-chip" onclick="applyPreset('warehouse/cmd/shuttle', '{&quot;action&quot;:&quot;servo_direct&quot;,&quot;pin&quot;:27,&quot;angle&quot;:90}')">X우 정지(90)</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Conveyor Tab -->
+    <div id="tab-conveyor" class="tab-panel">
+      <div class="card-body">
+        <div style="margin-bottom:12px; font-size:12px; color:var(--text-dim);">토픽: <code style="color:var(--blue);">warehouse/cmd/conveyor</code></div>
+
+        <label style="margin-bottom:8px; display:block;">스테퍼 이동 (NEMA17, 0.2mm/step)</label>
+        <div class="presets">
+          <button class="preset-chip" onclick="applyPreset('warehouse/cmd/conveyor', '{&quot;id&quot;:&quot;esp32_1&quot;,&quot;steps&quot;:250,&quot;dir&quot;:&quot;fwd&quot;}')">전진 50mm</button>
+          <button class="preset-chip" onclick="applyPreset('warehouse/cmd/conveyor', '{&quot;id&quot;:&quot;esp32_1&quot;,&quot;steps&quot;:500,&quot;dir&quot;:&quot;fwd&quot;}')">전진 100mm</button>
+          <button class="preset-chip" onclick="applyPreset('warehouse/cmd/conveyor', '{&quot;id&quot;:&quot;esp32_1&quot;,&quot;steps&quot;:750,&quot;dir&quot;:&quot;fwd&quot;}')">전진 150mm</button>
+          <button class="preset-chip" onclick="applyPreset('warehouse/cmd/conveyor', '{&quot;id&quot;:&quot;esp32_1&quot;,&quot;steps&quot;:250,&quot;dir&quot;:&quot;rev&quot;}')">후진 50mm</button>
+          <button class="preset-chip" onclick="applyPreset('warehouse/cmd/conveyor', '{&quot;id&quot;:&quot;esp32_1&quot;,&quot;steps&quot;:500,&quot;dir&quot;:&quot;rev&quot;}')">후진 100mm</button>
+          <button class="preset-chip" onclick="applyPreset('warehouse/cmd/conveyor', '{&quot;id&quot;:&quot;esp32_1&quot;,&quot;steps&quot;:750,&quot;dir&quot;:&quot;rev&quot;}')">후진 150mm</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Common publish form -->
+    <div class="card-body" style="border-top: 1px solid var(--border);">
+      <div class="publish-form">
+        <div class="publish-row">
+          <div class="form-group">
+            <label>토픽</label>
+            <input type="text" id="pubTopic" placeholder="예: warehouse/cmd/shuttle" />
+          </div>
+          <div class="form-group">
+            <label>QoS</label>
+            <select id="pubQos" class="qos-select">
+              <option value="0">0</option>
+              <option value="1">1</option>
+              <option value="2">2</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>&nbsp;</label>
+            <button class="btn btn-primary" onclick="publish()">발행</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>페이로드</label>
+          <textarea id="pubPayload" placeholder='JSON 또는 텍스트 메시지 입력...'></textarea>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <label class="retain-toggle">
+            <input type="checkbox" id="pubRetain" /> Retain 메시지
+          </label>
+          <button class="btn btn-outline btn-sm" onclick="formatJson()">JSON 정리</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Connected Clients -->
+  <div class="card">
+    <div class="card-header">
+      <span><span class="icon">🖥️</span>연결된 클라이언트</span>
+      <button class="btn btn-outline btn-sm" onclick="fetchStats()">새로고침</button>
+    </div>
+    <div class="card-body">
+      <div id="clientsList" class="clients-empty">불러오는 중...</div>
+    </div>
+  </div>
+
+  <!-- Message Log -->
+  <div class="card message-log-wrapper">
+    <div class="card-header">
+      <span><span class="icon">📋</span>브로커 메시지 로그</span>
+      <div class="log-controls">
+        <input type="text" class="log-filter" id="logFilter" placeholder="토픽 필터..." oninput="renderLog()" />
+        <button class="btn btn-outline btn-sm" onclick="clearLog()">지우기</button>
+      </div>
+    </div>
+    <div class="card-body" style="padding:0;">
+      <div id="messageLog" class="message-log">
+        <div class="log-empty">브로커를 통해 오가는 모든 메시지가 여기에 표시됩니다.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toastContainer" class="toast-container"></div>
+
+<script>
+  // ── State ──
+  let client = null;
+  let connected = false;
+  let messages = [];
+  let stats = { received: 0, published: 0, connectedAt: null };
+  const MAX_MESSAGES = 500;
+
+  // ── Auto-connect on page load ──
+  window.addEventListener('DOMContentLoaded', () => {
+    autoConnect();
+    fetchStats();
+    // 주기적으로 클라이언트 목록 갱신
+    setInterval(fetchStats, 5000);
+  });
+
+  function autoConnect() {
+    const wsPort = 8083;
+    const host = `ws://${window.location.hostname}:${wsPort}`;
+    const clientId = `broker-dashboard-${Math.random().toString(36).substr(2, 6)}`;
+
+    try {
+      client = mqtt.connect(host, {
+        clientId,
+        clean: true,
+        connectTimeout: 5000,
+        reconnectPeriod: 3000,
+      });
+
+      client.on('connect', () => {
+        connected = true;
+        stats.connectedAt = Date.now();
+        updateStatus(true);
+        // 브로커의 모든 메시지를 자동 구독
+        client.subscribe('#', { qos: 0 });
+        toast('브로커에 연결되었습니다.', 'success');
+      });
+
+      client.on('message', (topic, payload) => {
+        // $SYS 토픽은 무시
+        if (topic.startsWith('$SYS')) return;
+
+        const msg = {
+          dir: 'recv',
+          topic,
+          payload: payload.toString(),
+          time: new Date(),
+        };
+        addMessage(msg);
+        stats.received++;
+        document.getElementById('statReceived').textContent = stats.received;
+      });
+
+      client.on('error', (err) => {
+        toast(`브로커 오류: ${err.message}`, 'error');
+      });
+
+      client.on('close', () => {
+        connected = false;
+        updateStatus(false);
+      });
+
+      client.on('reconnect', () => {
+        updateStatus(false);
+        document.getElementById('statusText').textContent = '재연결 중...';
+      });
+
+    } catch (e) {
+      toast(`연결 실패: ${e.message}`, 'error');
+    }
+  }
+
+  // ── Status ──
+  function updateStatus(isConnected) {
+    const badge = document.getElementById('statusBadge');
+    const text = document.getElementById('statusText');
+
+    if (isConnected) {
+      badge.className = 'status-badge connected';
+      text.textContent = '브로커 정상';
+    } else {
+      badge.className = 'status-badge disconnected';
+      text.textContent = '연결 끊김';
+      document.getElementById('statUptime').textContent = '0s';
+    }
+  }
+
+  // ── Uptime timer ──
+  setInterval(() => {
+    if (stats.connectedAt) {
+      const sec = Math.floor((Date.now() - stats.connectedAt) / 1000);
+      const h = Math.floor(sec / 3600);
+      const m = Math.floor((sec % 3600) / 60);
+      const s = sec % 60;
+      let text = `${s}s`;
+      if (m > 0) text = `${m}m ${text}`;
+      if (h > 0) text = `${h}h ${text}`;
+      document.getElementById('statUptime').textContent = text;
+    }
+  }, 1000);
+
+  // ── Fetch broker stats (REST API) ──
+  async function fetchStats() {
+    try {
+      const res = await fetch('/api/stats');
+      const data = await res.json();
+      // 대시보드 자신은 클라이언트 목록에서 제외
+      const filteredClients = data.clients.filter(id => !id.startsWith('broker-dashboard-'));
+      document.getElementById('statClients').textContent = filteredClients.length;
+
+      const container = document.getElementById('clientsList');
+      if (filteredClients.length === 0) {
+        container.innerHTML = '<div class="clients-empty">연결된 클라이언트가 없습니다.</div>';
+      } else {
+        container.innerHTML = '<div class="clients-list">' +
+          filteredClients.map(id => `<span class="client-chip">${escapeHtml(id)}</span>`).join('') +
+          '</div>';
+      }
+    } catch (e) {
+      // API 연결 실패 시 무시
+    }
+  }
+
+  // ── Publish ──
+  function publish() {
+    if (!connected) { toast('브로커에 연결되지 않았습니다.', 'error'); return; }
+
+    const topic = document.getElementById('pubTopic').value.trim();
+    const payload = document.getElementById('pubPayload').value;
+    const qos = parseInt(document.getElementById('pubQos').value);
+    const retain = document.getElementById('pubRetain').checked;
+
+    if (!topic) { toast('토픽을 입력하세요.', 'error'); return; }
+
+    client.publish(topic, payload, { qos, retain }, (err) => {
+      if (err) {
+        toast(`발행 실패: ${err.message}`, 'error');
+      } else {
+        stats.published++;
+        document.getElementById('statPublished').textContent = stats.published;
+        toast(`발행 완료: ${topic}`, 'success');
+      }
+    });
+  }
+
+  function applyPreset(topic, payload) {
+    document.getElementById('pubTopic').value = topic;
+    document.getElementById('pubPayload').value = payload;
+    formatJson();
+  }
+
+  function formatJson() {
+    const ta = document.getElementById('pubPayload');
+    try {
+      const obj = JSON.parse(ta.value);
+      ta.value = JSON.stringify(obj, null, 2);
+    } catch (e) { /* not JSON */ }
+  }
+
+  // ── Message Log ──
+  function addMessage(msg) {
+    messages.unshift(msg);
+    if (messages.length > MAX_MESSAGES) messages.pop();
+    renderLog();
+  }
+
+  function renderLog() {
+    const container = document.getElementById('messageLog');
+    const filter = document.getElementById('logFilter').value.trim().toLowerCase();
+
+    const filtered = filter
+      ? messages.filter(m => m.topic.toLowerCase().includes(filter))
+      : messages;
+
+    if (filtered.length === 0) {
+      container.innerHTML = '<div class="log-empty">브로커를 통해 오가는 모든 메시지가 여기에 표시됩니다.</div>';
+      return;
+    }
+
+    container.innerHTML = filtered.slice(0, 100).map(m => {
+      const time = m.time.toLocaleTimeString('ko-KR', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      let displayPayload = m.payload;
+      try {
+        const obj = JSON.parse(m.payload);
+        displayPayload = JSON.stringify(obj, null, 2);
+      } catch (e) {}
+
+      return `<div class="log-entry">
+        <div class="log-meta">
+          <span class="log-dir ${m.dir}">${m.dir === 'pub' ? 'PUB' : 'RECV'}</span>
+          <span class="log-topic">${escapeHtml(m.topic)}</span>
+          <span class="log-time">${time}</span>
+        </div>
+        <div class="log-payload">${escapeHtml(displayPayload)}</div>
+      </div>`;
+    }).join('');
+  }
+
+  function clearLog() {
+    messages = [];
+    stats.received = 0;
+    stats.published = 0;
+    document.getElementById('statReceived').textContent = '0';
+    document.getElementById('statPublished').textContent = '0';
+    renderLog();
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  // ── Toast ──
+  function toast(message, type = 'info') {
+    const container = document.getElementById('toastContainer');
+    const el = document.createElement('div');
+    el.className = `toast ${type}`;
+    el.textContent = message;
+    container.appendChild(el);
+    setTimeout(() => el.remove(), 3000);
+  }
+
+  // ── Tabs ──
+  function switchTab(tabName) {
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
+    document.getElementById(`tab-${tabName}`).classList.add('active');
+    event.currentTarget.classList.add('active');
+  }
+
+  // ── Keyboard shortcut ──
+  document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.key === 'Enter') {
+      publish();
+    }
+  });
+</script>
+
+</body>
+</html>
