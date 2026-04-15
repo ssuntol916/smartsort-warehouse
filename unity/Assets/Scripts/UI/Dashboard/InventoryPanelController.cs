@@ -35,15 +35,16 @@ public class InventoryPanelController : MonoBehaviour
     [SerializeField] private Button _inventoryBtn;                                // 재고현황 버튼
     [SerializeField] private Button _inboundBtn;                                  // 입고내역 버튼
     [SerializeField] private Button _outboundBtn;                                 // 출고내역 버튼
+    [SerializeField] private Button _closeDashboardBtn;                           // 대시보드 닫기 버튼
 
     [SerializeField] private GameObject _inventoryView;                           // 재고현황 View
     [SerializeField] private GameObject _inboundView;                             // 입고내역 View
     [SerializeField] private GameObject _outboundView;                            // 출고내역 View
 
-    [SerializeField] private GameObject _inventoryRowPrefab;                  // 재고현황 Row 프리팹
-    [SerializeField] private Transform _content;                             // 재고현황 Content
+    [SerializeField] private GameObject _inventoryRowPrefab;                      // 재고현황 Row 프리팹
+    [SerializeField] private Transform _content;                                  // 재고현황 Content
     [SerializeField] private TMP_InputField _searchInput;                         // 재고현황 검색 입력
-    [SerializeField] private TMP_Dropdown _filterDropdown;                      // 재고현황 필터 드롭다운
+    [SerializeField] private TMP_Dropdown _filterDropdown;                        // 재고현황 필터 드롭다운
 
     [SerializeField] private Button _colPartNameBtn;                              // 부품명 정렬 버튼
     [SerializeField] private Button _colTotalQtyBtn;                              // 제품 총 수량 정렬 버튼
@@ -65,13 +66,13 @@ public class InventoryPanelController : MonoBehaviour
     [SerializeField] private TextMeshProUGUI _colBoxQtyText;                      // BOX당 제품수량 헤더 텍스트 (▲▼)
     [SerializeField] private TextMeshProUGUI _colPositionText;                    // 위치 헤더 텍스트 (▲▼)
 
-    [SerializeField] private GameObject _transactionRowPrefab;                // 입고/출고 Row 프리팹
-    [SerializeField] private Transform _inboundContent;                      // 입고내역 Content
-    [SerializeField] private Transform _outboundContent;                     // 출고내역 Content
+    [SerializeField] private GameObject _transactionRowPrefab;                    // 입고/출고 Row 프리팹
+    [SerializeField] private Transform _inboundContent;                           // 입고내역 Content
+    [SerializeField] private Transform _outboundContent;                          // 출고내역 Content
     [SerializeField] private TMP_InputField _inboundSearchInput;                  // 입고내역 검색 입력
     [SerializeField] private TMP_InputField _outboundSearchInput;                 // 출고내역 검색 입력
-    [SerializeField] private TMP_Dropdown _inboundFilterDropdown;               // 입고내역 필터 드롭다운
-    [SerializeField] private TMP_Dropdown _outboundFilterDropdown;              // 출고내역 필터 드롭다운
+    [SerializeField] private TMP_Dropdown _inboundFilterDropdown;                 // 입고내역 필터 드롭다운
+    [SerializeField] private TMP_Dropdown _outboundFilterDropdown;                // 출고내역 필터 드롭다운
 
     [SerializeField] private Button _inColTransactionNoBtn;                       // 입고번호 정렬 버튼
     [SerializeField] private Button _inColQrBtn;                                  // QR코드 정렬 버튼
@@ -111,24 +112,24 @@ public class InventoryPanelController : MonoBehaviour
 
     // ───────────────────────────── 런타임 데이터 ─────────────────────────────
 
-    private List<InventoryData> _dummyData = new List<InventoryData>();    // 재고현황 더미 데이터 - TODO: Supabase 연동
-    private List<TransactionData> _inboundDummyData = new List<TransactionData>(); // 입고 더미 데이터 - TODO: Supabase 연동
-    private List<TransactionData> _outboundDummyData = new List<TransactionData>(); // 출고 더미 데이터 - TODO: Supabase 연동
+    private List<InventoryData> _dummyData = new List<InventoryData>();                // 재고현황 더미 데이터 - TODO: Supabase 연동
+    private List<TransactionData> _inboundDummyData = new List<TransactionData>();     // 입고 더미 데이터 - TODO: Supabase 연동
+    private List<TransactionData> _outboundDummyData = new List<TransactionData>();    // 출고 더미 데이터 - TODO: Supabase 연동
 
-    private string _currentSortColumn = "";    // 재고현황 현재 정렬 컬럼
-    private int _sortState = 0;     // 재고현황 정렬 상태 (0=기본, 1=오름차순, 2=내림차순)
+    private string _currentSortColumn = "";      // 재고현황 현재 정렬 컬럼
+    private int _sortState = 0;                  // 재고현황 정렬 상태 (0=기본, 1=오름차순, 2=내림차순)
 
-    private string _inboundSortColumn = "";    // 입고내역 현재 정렬 컬럼
-    private int _inboundSortState = 0;     // 입고내역 정렬 상태
-    private string _outboundSortColumn = "";    // 출고내역 현재 정렬 컬럼
-    private int _outboundSortState = 0;     // 출고내역 정렬 상태
+    private string _inboundSortColumn = "";      // 입고내역 현재 정렬 컬럼
+    private int _inboundSortState = 0;           // 입고내역 정렬 상태
+    private string _outboundSortColumn = "";     // 출고내역 현재 정렬 컬럼
+    private int _outboundSortState = 0;          // 출고내역 정렬 상태
 
-    private string _currentFilter = "전체";   // 재고현황 현재 필터
-    private string _currentKeyword = "";        // 재고현황 현재 검색어
-    private string _inboundFilter = "전체";   // 입고내역 현재 필터
-    private string _inboundKeyword = "";        // 입고내역 현재 검색어
-    private string _outboundFilter = "전체";  // 출고내역 현재 필터
-    private string _outboundKeyword = "";       // 출고내역 현재 검색어
+    private string _currentFilter = "전체";      // 재고현황 현재 필터
+    private string _currentKeyword = "";         // 재고현황 현재 검색어
+    private string _inboundFilter = "전체";      // 입고내역 현재 필터
+    private string _inboundKeyword = "";         // 입고내역 현재 검색어
+    private string _outboundFilter = "전체";     // 출고내역 현재 필터
+    private string _outboundKeyword = "";        // 출고내역 현재 검색어
 
     // ───────────────────────────── Unity 생명주기 ─────────────────────────────
 
@@ -149,7 +150,7 @@ public class InventoryPanelController : MonoBehaviour
     // ───────────────────────────── 초기화 ─────────────────────────────
 
     /**
-     * @brief 메뉴 버튼 클릭 이벤트 등록
+     * @brief 메뉴 버튼 및 닫기 버튼 클릭 이벤트 등록
      */
     private void InitMenuButtons()
     {
@@ -157,6 +158,7 @@ public class InventoryPanelController : MonoBehaviour
         _inventoryBtn.onClick.AddListener(OnInventoryBtnClicked);
         _inboundBtn.onClick.AddListener(OnInboundBtnClicked);
         _outboundBtn.onClick.AddListener(OnOutboundBtnClicked);
+        _closeDashboardBtn.onClick.AddListener(() => gameObject.SetActive(false));
     }
 
     /**

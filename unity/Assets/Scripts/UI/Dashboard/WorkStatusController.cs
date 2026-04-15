@@ -61,7 +61,7 @@ public class WorkStatusController : MonoBehaviour
     /**
      * @brief 초기화 - 모든 단계 비활성 상태로 시작
      */
-    void Start()
+    void Awake()
     {
         // TODO: MQTT / Supabase Realtime 연동으로 상태 수신 후 호출
         SetInboundActive(false);
