@@ -41,10 +41,8 @@ app.use(express.static(path.join(__dirname, "..", "public")));
 
 // REST API: 브로커 상태
 app.get("/api/stats", (_req, res) => {
-  const clients: string[] = [];
-  for (const [id] of (broker as any).clients) {
-    clients.push(id);
-  }
+  const clientsMap = (broker as any).clients ?? {};
+  const clients: string[] = Object.keys(clientsMap);
   res.json({
     connectedClients: clients.length,
     clients,
@@ -119,4 +117,4 @@ const shutdown = () => {
 };
 
 process.on("SIGINT", shutdown);
-process.on("SIGTERM", shutdown);
+process.on("SIGTERM", shutdown);

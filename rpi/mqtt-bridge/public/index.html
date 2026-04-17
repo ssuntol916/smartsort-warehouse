@@ -799,11 +799,10 @@
     });
   }
 
-  function applyPreset(topic, payload, autoPublish = false) {
+  function applyPreset(topic, payload) {
     document.getElementById('pubTopic').value = topic;
     document.getElementById('pubPayload').value = payload;
     formatJson();
-    if (autoPublish) publish();
   }
 
   function formatJson() {
@@ -896,3 +895,4 @@
 
 </body>
 </html>
+                                                                                                                             
