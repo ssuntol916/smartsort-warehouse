@@ -5,14 +5,17 @@
 // 작성일  : 2026-03-27
 // 수정이력 : 2026-04-01 — 서보모터 점진적 이동(smooth move) 적용
 //           2026-04-10 — X, Y축 µs 캘리브레이션 보정 적용
+//           2026-04-15 — mDNS + RemoteSerial(Telnet) 원격 로깅 적용
 // ============================================================
 
 #include <Arduino.h>
 #include <WiFi.h>
+#include <ESPmDNS.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 #include <ESP32Servo.h>
 #include "secrets.h"
+#include "RemoteSerial.h"
 
 // MG90S 개체별 정지점 (µs) — 캘리브레이션 후 측정값으로 교체
 const int STOP_US_X_LEFT  = 1500;
@@ -41,6 +44,7 @@ const int RAMP_US_DELAY_MS = 20;   // 스텝 간 대기시간
 // ============================================================
 const int MQTT_PORT = 1883;
 const char* MQTT_CLIENT_ID = "smartsort-shuttle-esp32";
+const char* MDNS_HOSTNAME  = "smartsort-shuttle";
 
 // 구독 토픽
 const char* TOPIC_CMD_SHUTTLE = "warehouse/cmd/shuttle";
@@ -146,6 +150,7 @@ const char* stateToString(ShuttleState state) {
 // ============================================================
 WiFiClient _wifiClient;
 PubSubClient _mqttClient(_wifiClient);
+RemoteSerial LOG;
 
 // 서보 객체 — 총 8개
 Servo _servoDirL;        // 방향 전환 좌측 (래크 앤 피니언)
@@ -177,6 +182,7 @@ const unsigned long RECONNECT_INTERVAL = 5000;
 // 함수 선언
 // ============================================================
 void setupWiFi();
+void setupMDNS();
 void setupServos();
 void setupEndstops();
 bool reconnectMQTT();
@@ -391,10 +397,12 @@ void rampStopPairUs(Servo& servoL, Servo& servoR,
 
 void setup() {
     Serial.begin(115200);
-    Serial.println("\n[셔틀 ESP32] 시작");
+    LOG.println("\n[셔틀 ESP32] 시작");
 
     setupEndstops();
     setupWiFi();
+    setupMDNS();
+    LOG.begin(23);
     setupServos();
 
     _mqttClient.setServer(MQTT_BROKER, MQTT_PORT);
@@ -408,7 +416,10 @@ void loop() {
     // Wi-Fi 연결 유지
     if (WiFi.status() != WL_CONNECTED) {
         setupWiFi();
+        setupMDNS();
     }
+
+    LOG.handle();
 
     // MQTT 연결 유지 (논블로킹 재연결)
     if (!_mqttClient.connected()) {
@@ -432,22 +443,40 @@ void loop() {
  * @brief Wi-Fi 네트워크에 연결한다.
  */
 void setupWiFi() {
-    Serial.printf("[WiFi] %s 에 연결 중...\n", WIFI_SSID);
+    LOG.printf("[WiFi] %s 에 연결 중...\n", WIFI_SSID);
     WiFi.mode(WIFI_STA);
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
     int retryCount = 0;
     while (WiFi.status() != WL_CONNECTED && retryCount < 20) {
         delay(500);
-        Serial.print(".");
+        LOG.print(".");
         retryCount++;
     }
 
     if (WiFi.status() == WL_CONNECTED) {
-        Serial.printf("\n[WiFi] 연결 완료 — IP: %s\n", WiFi.localIP().toString().c_str());
+        LOG.printf("\n[WiFi] 연결 완료 — IP: %s\n", WiFi.localIP().toString().c_str());
     } else {
-        Serial.println("\n[WiFi] 연결 실패 — 재시도 예정");
+        LOG.println("\n[WiFi] 연결 실패 — 재시도 예정");
     }
+}
+
+/**
+ * @brief mDNS 응답자를 시작하고 Telnet/MQTT 서비스를 광고한다.
+ *        WiFi 연결 완료 후 호출할 것.
+ */
+void setupMDNS() {
+    if (!MDNS.begin(MDNS_HOSTNAME)) {
+        LOG.println("[mDNS] 시작 실패");
+        return;
+    }
+
+    // 서비스 광고 — 네트워크 스캐너(Bonjour Browser 등)에서 발견 가능
+    MDNS.addService("telnet", "tcp", 23);
+    MDNS.addService("smartsort", "tcp", 23);  // 커스텀 식별자
+
+    LOG.printf("[mDNS] 시작 완료 — http://%s.local (Telnet 23)\n",
+                  MDNS_HOSTNAME);
 }
 
 // ============================================================
@@ -461,7 +490,7 @@ void setupEndstops() {
     pinMode(PIN_ENDSTOP_X, INPUT_PULLUP);
     pinMode(PIN_ENDSTOP_Y, INPUT_PULLUP);
     pinMode(PIN_ENDSTOP_Z, INPUT_PULLUP);
-    Serial.println("[엔드스톱] 초기화 완료");
+    LOG.println("[엔드스톱] 초기화 완료");
 }
 
 // ============================================================
@@ -512,7 +541,7 @@ void setupServos() {
     _servoZL.write(Z_LIFT_STOP);
     _servoZR.write(Z_LIFT_STOP);
 
-    Serial.println("[서보] 8개 초기화 완료 (방향전환 ×2, X ×2, Y ×2, Z ×2)");
+    LOG.println("[서보] 8개 초기화 완료 (방향전환 ×2, X ×2, Y ×2, Z ×2)");
 }
 
 // ============================================================
@@ -524,17 +553,17 @@ void setupServos() {
  * @return 연결 성공 여부
  */
 bool reconnectMQTT() {
-    Serial.println("[MQTT] 브로커 연결 시도...");
+    LOG.println("[MQTT] 브로커 연결 시도...");
 
     if (_mqttClient.connect(MQTT_CLIENT_ID)) {
-        Serial.println("[MQTT] 연결 성공");
+        LOG.println("[MQTT] 연결 성공");
         _mqttClient.subscribe(TOPIC_CMD_SHUTTLE);
-        Serial.printf("[MQTT] 구독: %s\n", TOPIC_CMD_SHUTTLE);
+        LOG.printf("[MQTT] 구독: %s\n", TOPIC_CMD_SHUTTLE);
         publishStatus();
         return true;
     }
 
-    Serial.printf("[MQTT] 연결 실패 — rc=%d\n", _mqttClient.state());
+    LOG.printf("[MQTT] 연결 실패 — rc=%d\n", _mqttClient.state());
     return false;
 }
 
@@ -546,13 +575,13 @@ bool reconnectMQTT() {
  * @param length 페이로드 길이
  */
 void onMqttMessage(char* topic, byte* payload, unsigned int length) {
-    Serial.printf("[MQTT] 수신 — 토픽: %s\n", topic);
+    LOG.printf("[MQTT] 수신 — 토픽: %s\n", topic);
 
     JsonDocument doc;
     DeserializationError error = deserializeJson(doc, payload, length);
 
     if (error) {
-        Serial.printf("[MQTT] JSON 파싱 실패: %s\n", error.c_str());
+        LOG.printf("[MQTT] JSON 파싱 실패: %s\n", error.c_str());
         publishAlert("error", "JSON 파싱 실패");
         return;
     }
@@ -589,7 +618,7 @@ void onMqttMessage(char* topic, byte* payload, unsigned int length) {
                         smoothServoPairMove(_servoDirL, _servoDirR,
                                             _angleDirL, _angleDirR,
                                             angle, angle);
-                        Serial.printf("[서보직접] 방향전환 쌍(13,15) → %d° (sync smooth)\n", angle);
+                        LOG.printf("[서보직접] 방향전환 쌍(13,15) → %d° (sync smooth)\n", angle);
                         publishStatus();
                         return;
                     }
@@ -606,11 +635,11 @@ void onMqttMessage(char* topic, byte* payload, unsigned int length) {
             int pin = pinVar | -1;
             if (pin == PIN_DIR_LEFT) {
                 smoothServoMove(_servoDirL, _angleDirL, angle);
-                Serial.printf("[서보직접] 핀 %d → %d° (smooth)\n", pin, angle);
+                LOG.printf("[서보직접] 핀 %d → %d° (smooth)\n", pin, angle);
                 publishStatus();
             } else if (pin == PIN_DIR_RIGHT) {
                 smoothServoMove(_servoDirR, _angleDirR, angle);
-                Serial.printf("[서보직접] 핀 %d → %d° (smooth)\n", pin, angle);
+                LOG.printf("[서보직접] 핀 %d → %d° (smooth)\n", pin, angle);
                 publishStatus();
             } else {
                 publishAlert("error", "지원하지 않는 핀 번호");
@@ -667,7 +696,7 @@ void onMqttMessage(char* topic, byte* payload, unsigned int length) {
                 return;
             }
 
-            Serial.printf("[주행직접] axis=%s L:%d° R:%d° %lums\n",
+            LOG.printf("[주행직접] axis=%s L:%d° R:%d° %lums\n",
                         axis, angleL, angleR, durationMs);
 
             // X축: 캘리브레이션 µs 값 적용
@@ -791,7 +820,7 @@ void onMqttMessage(char* topic, byte* payload, unsigned int length) {
                 return;
             }
 
-            Serial.printf("[주행직접us] axis=%s L:%dus R:%dus %lums\n",
+            LOG.printf("[주행직접us] axis=%s L:%dus R:%dus %lums\n",
                         axis, pulseL, pulseR, durationMs);
 
             servoL->writeMicroseconds(pulseL);
@@ -835,7 +864,7 @@ void handleMoveCommand(JsonDocument& doc) {
     }
 
     if (targetX >= GRID_MAX_X || targetY >= GRID_MAX_Y || targetZ >= GRID_MAX_Z) {
-        Serial.printf("[셔틀] 그리드 범위 초과 — 목표: (%d,%d,%d), 최대: (%d,%d,%d)\n",
+        LOG.printf("[셔틀] 그리드 범위 초과 — 목표: (%d,%d,%d), 최대: (%d,%d,%d)\n",
                       targetX, targetY, targetZ,
                       GRID_MAX_X - 1, GRID_MAX_Y - 1, GRID_MAX_Z - 1);
         publishAlert("error", "그리드 범위 초과");
@@ -843,13 +872,13 @@ void handleMoveCommand(JsonDocument& doc) {
     }
 
     if (!_isHomed) {
-        Serial.println("[셔틀] 경고: 홈 캘리브레이션 미완료 상태에서 이동 시도");
+        LOG.println("[셔틀] 경고: 홈 캘리브레이션 미완료 상태에서 이동 시도");
         publishAlert("warn", "홈 캘리브레이션 미완료");
     }
 
     _currentBinId = binId;
 
-    Serial.printf("[셔틀] 이동 명령 — 목표: (%d,%d,%d) Bin: %s\n",
+    LOG.printf("[셔틀] 이동 명령 — 목표: (%d,%d,%d) Bin: %s\n",
                   targetX, targetY, targetZ, binId);
 
     executeTransferSequence(targetX, targetY, targetZ, binId);
@@ -859,7 +888,7 @@ void handleMoveCommand(JsonDocument& doc) {
  * @brief 엔드스톱 기반 홈 포지션 (0,0,0) 캘리브레이션을 수행한다.
  */
 void handleHomeCommand() {
-    Serial.println("[셔틀] 홈 캘리브레이션 시작");
+    LOG.println("[셔틀] 홈 캘리브레이션 시작");
     _currentState = STATE_HOMING;
     publishStatus();
 
@@ -883,11 +912,11 @@ void handleHomeCommand() {
         _currentZ = 0;
         _isHomed = true;
         _currentState = STATE_IDLE;
-        Serial.println("[셔틀] 홈 캘리브레이션 완료 — (0,0,0)");
+        LOG.println("[셔틀] 홈 캘리브레이션 완료 — (0,0,0)");
     } else {
         _currentState = STATE_ERROR;
         _isHomed = false;
-        Serial.println("[셔틀] 홈 캘리브레이션 실패");
+        LOG.println("[셔틀] 홈 캘리브레이션 실패");
         publishAlert("error", "홈 캘리브레이션 실패");
     }
 
@@ -922,7 +951,7 @@ void executeTransferSequence(int targetX, int targetY, int targetZ, const char* 
 
         _currentState = STATE_MOVING_X;
         publishStatus();
-        Serial.printf("[셔틀] X축 이동: %d → %d (%+d칸)\n", _currentX, targetX, deltaX);
+        LOG.printf("[셔틀] X축 이동: %d → %d (%+d칸)\n", _currentX, targetX, deltaX);
         moveX(deltaX);
         _currentX = targetX;
     }
@@ -936,7 +965,7 @@ void executeTransferSequence(int targetX, int targetY, int targetZ, const char* 
 
         _currentState = STATE_MOVING_Y;
         publishStatus();
-        Serial.printf("[셔틀] Y축 이동: %d → %d (%+d칸)\n", _currentY, targetY, deltaY);
+        LOG.printf("[셔틀] Y축 이동: %d → %d (%+d칸)\n", _currentY, targetY, deltaY);
         moveY(deltaY);
         _currentY = targetY;
     }
@@ -945,7 +974,7 @@ void executeTransferSequence(int targetX, int targetY, int targetZ, const char* 
     if (deltaZ != 0) {
         _currentState = STATE_LIFTING_Z;
         publishStatus();
-        Serial.printf("[셔틀] Z축 리프트: %d → %d (%+d층)\n", _currentZ, targetZ, deltaZ);
+        LOG.printf("[셔틀] Z축 리프트: %d → %d (%+d층)\n", _currentZ, targetZ, deltaZ);
         moveZ(deltaZ);
         _currentZ = targetZ;
     }
@@ -955,7 +984,7 @@ void executeTransferSequence(int targetX, int targetY, int targetZ, const char* 
     delay(DIR_SWITCH_DELAY);
 
     _currentState = STATE_IDLE;
-    Serial.printf("[셔틀] 이송 완료 — 위치: (%d,%d,%d) Bin: %s\n",
+    LOG.printf("[셔틀] 이송 완료 — 위치: (%d,%d,%d) Bin: %s\n",
                   _currentX, _currentY, _currentZ, binId);
 
     publishStatus();
@@ -973,7 +1002,7 @@ void switchToXMode() {
     smoothServoPairMove(_servoDirL, _servoDirR,
                         _angleDirL, _angleDirR,
                         DIR_ANGLE_X_MODE, DIR_ANGLE_X_MODE);
-    Serial.println("[방향전환] X축 모드 (Y축 바퀴 양측 점진적 상승)");
+    LOG.println("[방향전환] X축 모드 (Y축 바퀴 양측 점진적 상승)");
 }
 
 /**
@@ -984,7 +1013,7 @@ void switchToYMode() {
     smoothServoPairMove(_servoDirL, _servoDirR,
                         _angleDirL, _angleDirR,
                         DIR_ANGLE_Y_MODE, DIR_ANGLE_Y_MODE);
-    Serial.println("[방향전환] Y축 모드 (Y축 바퀴 양측 점진적 하강)");
+    LOG.println("[방향전환] Y축 모드 (Y축 바퀴 양측 점진적 하강)");
 }
 
 // ============================================================
@@ -1130,7 +1159,7 @@ void stopAllDrive() {
  * @return 홈 도달 성공 여부
  */
 bool homeAxis(int endstopPin, Servo& servoL, Servo& servoR, int driveAngle, const char* axisName) {
-    Serial.printf("[홈] %s축 홈 복귀 시작 (점진적)\n", axisName);
+    LOG.printf("[홈] %s축 홈 복귀 시작 (점진적)\n", axisName);
 
     unsigned long timeout = 15000;
     unsigned long startTime = millis();
@@ -1142,7 +1171,7 @@ bool homeAxis(int endstopPin, Servo& servoL, Servo& servoR, int driveAngle, cons
         if (millis() - startTime > timeout) {
             // 타임아웃 시 점진적 감속 정지
             rampStopPair(servoL, servoR, driveAngle);
-            Serial.printf("[홈] %s축 타임아웃 — 엔드스톱 미감지\n", axisName);
+            LOG.printf("[홈] %s축 타임아웃 — 엔드스톱 미감지\n", axisName);
             return false;
         }
         delay(10);
@@ -1150,7 +1179,7 @@ bool homeAxis(int endstopPin, Servo& servoL, Servo& servoR, int driveAngle, cons
 
     // 엔드스톱 감지 → 점진적 감속 정지
     rampStopPair(servoL, servoR, driveAngle);
-    Serial.printf("[홈] %s축 홈 도달\n", axisName);
+    LOG.printf("[홈] %s축 홈 도달\n", axisName);
     return true;
 }
 
@@ -1175,7 +1204,7 @@ void publishStatus() {
     serializeJson(doc, buffer);
 
     _mqttClient.publish(TOPIC_STATUS_SHUTTLE, buffer);
-    Serial.printf("[MQTT] 상태 발행: %s\n", buffer);
+    LOG.printf("[MQTT] 상태 발행: %s\n", buffer);
 }
 
 /**
@@ -1197,7 +1226,7 @@ void publishAlert(const char* level, const char* msg) {
     serializeJson(doc, buffer);
 
     _mqttClient.publish(TOPIC_ALERT, buffer);
-    Serial.printf("[MQTT] 알림 발행: %s\n", buffer);
+    LOG.printf("[MQTT] 알림 발행: %s\n", buffer);
 }
 
 // ============================================================
