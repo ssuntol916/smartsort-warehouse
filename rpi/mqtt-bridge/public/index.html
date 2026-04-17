@@ -793,15 +793,17 @@
       } else {
         stats.published++;
         document.getElementById('statPublished').textContent = stats.published;
+        addMessage({ dir: 'pub', topic, payload, time: new Date() });
         toast(`발행 완료: ${topic}`, 'success');
       }
     });
   }
 
-  function applyPreset(topic, payload) {
+  function applyPreset(topic, payload, autoPublish = false) {
     document.getElementById('pubTopic').value = topic;
     document.getElementById('pubPayload').value = payload;
     formatJson();
+    if (autoPublish) publish();
   }
 
   function formatJson() {
