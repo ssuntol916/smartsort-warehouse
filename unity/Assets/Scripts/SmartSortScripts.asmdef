@@ -3,7 +3,8 @@
     "rootNamespace": "",
     "references": [
         "SmartSortConfig",
-        "Unity.TextMeshPro"
+        "Unity.TextMeshPro",
+        "Unity.InputSystem"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
