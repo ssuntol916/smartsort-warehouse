@@ -793,6 +793,7 @@
       } else {
         stats.published++;
         document.getElementById('statPublished').textContent = stats.published;
+        addMessage({ dir: 'pub', topic, payload, time: new Date() });
         toast(`발행 완료: ${topic}`, 'success');
       }
     });
@@ -894,3 +895,4 @@
 
 </body>
 </html>
+                                                                                                                             

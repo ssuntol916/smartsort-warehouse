@@ -2,7 +2,7 @@ import Aedes, { AedesOptions } from "aedes";
 import { createServer as createTcpServer, Server as NetServer } from "net";
 import { createServer as createHttpServer } from "http";
 import express from "express";
-import { WebSocketServer } from "ws";
+import ws from "websocket-stream";
 import path from "path";
 
 // ── 설정 ──────────────────────────────────────────────
@@ -27,13 +27,8 @@ tcpServer.listen(MQTT_TCP_PORT, () => {
 
 // WebSocket MQTT (8083) - 브라우저 연결용
 const wsHttpServer = createHttpServer();
-const wss = new WebSocketServer({ server: wsHttpServer });
 
-wss.on("connection", (ws, req) => {
-  // websocket-stream 호환 래퍼
-  const stream = (require("websocket-stream") as any).createStream(ws);
-  broker.handle(stream);
-});
+ws.createServer({ server: wsHttpServer }, broker.handle as any);
 
 wsHttpServer.listen(WS_MQTT_PORT, () => {
   console.log(`🌐 MQTT WebSocket 실행 중: ws://0.0.0.0:${WS_MQTT_PORT}`);
@@ -46,10 +41,8 @@ app.use(express.static(path.join(__dirname, "..", "public")));
 
 // REST API: 브로커 상태
 app.get("/api/stats", (_req, res) => {
-  const clients: string[] = [];
-  for (const [id] of (broker as any).clients) {
-    clients.push(id);
-  }
+  const clientsMap = (broker as any).clients ?? {};
+  const clients: string[] = Object.keys(clientsMap);
   res.json({
     connectedClients: clients.length,
     clients,
@@ -124,4 +117,4 @@ const shutdown = () => {
 };
 
 process.on("SIGINT", shutdown);
-process.on("SIGTERM", shutdown);
+process.on("SIGTERM", shutdown);
