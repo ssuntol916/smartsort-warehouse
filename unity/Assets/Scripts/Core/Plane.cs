@@ -3,7 +3,9 @@
 // 역할    : 기구학 계산을 위한 면(Plane) 기반 클래스
 // 작성자  : 이현화
 // 작성일  : 2026-03-25
-// 수정이력: 
+// 수정이력: 2026-04-22 - Tolerance 를 0.01f 로 조정 (확장프로그램 기반 면 선택 오차 허용)
+//                      - GetCrossVectors() 에서 crossPosition 절대값 처리
+//                        (법선 방향이 반대인 경우도 일치로 처리)
 // ============================================================
 
 using UnityEngine;
@@ -11,7 +13,8 @@ using UnityEngine;
 public class Plane
 {
     // 허용 오차 (부동소수점 비교 시 사용)
-    private const float Tolerance = 1e-6f;
+    // [2026.04.22 수정] 확장프로그램 기반 면 선택 시 발생하는 미세 오차를 허용하기 위해 0.01f 로 조정
+    private const float Tolerance = 0.01f;
 
     private Vector3 _pointA;   // 면을 정의하는 첫 번째 점
     private Vector3 _pointB;   // 면을 정의하는 두 번째 점
@@ -51,7 +54,6 @@ public class Plane
     public bool IsParallel(Plane other)
     {
         // 1. 두 면의 방향 외적과 위치 외적을 계산
-        //    → GetCrossVectors() 로 외적 계산하기
         GetCrossVectors(other, out Vector3 crossDirection, out float crossPosition);
 
         // 2. 반환 조건
@@ -87,9 +89,9 @@ public class Plane
 
     /**
      * @brief  두 면의 방향 외적과 위치 외적을 계산한다.
-     * @param  other        비교할 대상 Plane
-     * @param  crossDir     방향벡터 외적 결과 (out)
-     * @param  crossPos     위치벡터 외적 결과 (out)
+     * @param  other            비교할 대상 Plane
+     * @param  crossDirection   방향벡터 외적 결과 (out)
+     * @param  crossPosition    위치벡터 외적 결과 (out)
      */
     private void GetCrossVectors(Plane other, out Vector3 crossDirection, out float crossPosition)
     {
@@ -104,10 +106,13 @@ public class Plane
         //    "끝점 - 시작점" 규칙: other.PointA - _pointA
         Vector3 dirToOther = other.PointA - _pointA;
 
-        // 3. 방향벡터와 dir 의 내적 계산
+        // [2026.04.22 수정] 법선 방향이 반대인 경우도 일치로 처리
+        // 3. 방향벡터와 dir 의 내적 절대값 계산
         //    크기 = 0 이면 → 두 면이 같은 평면 (일치)
         //    크기 > 0 이면 → 두 면이 다른 위치에 있음 (평행)
-        crossPosition = Vector3.Dot(Normal, dirToOther);
+        //    절대값을 사용하는 이유: 법선이 반대 방향일 때 내적이 음수가 되어
+        //    일치 판별이 실패하는 것을 방지하기 위함
+        crossPosition = Mathf.Abs(Vector3.Dot(Normal, dirToOther));
     }
 
     /**
@@ -119,7 +124,6 @@ public class Plane
     public bool IsCoincident(Plane other)
     {
         // 1. 두 면의 방향 외적과 위치 외적을 계산
-        //    → GetCrossVectors() 로 외적 계산하기
         GetCrossVectors(other, out Vector3 crossDirection, out float crossPosition);
 
         // 2. 반환 조건

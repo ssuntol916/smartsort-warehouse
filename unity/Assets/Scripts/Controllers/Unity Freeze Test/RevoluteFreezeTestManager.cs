@@ -4,44 +4,65 @@
 //           마우스 드래그로 오브젝트 B에 회전을 주어 구속 조건 및 클램프를 테스트한다.
 // 작성자  : 이현화
 // 작성일  : 2026-04-01
-// 수정이력: 
+// 수정이력: 2026-04-22 - LineBCenter 기반 위치 보정 추가 (_centerPoint, _centerOffset)
+//                      - _fixedRotation 추가 (누적 회전값)
+//                      - OnClampedCallback 등록 (클램프 후 offset, rotation 동기화)
+//                      - Update() @brief 주석 수정 (목표 위치 저장 내용 추가)
+//                      - FixedUpdate() → Update() 로 변경, Rigidbody 제거
+//                        (Transform 직접 제어 방식으로 리팩토링)
 // ============================================================
 
 using UnityEngine;
 
 public class RevoluteFreezeTestManager : MonoBehaviour
 {
+    // Inspector 연결 필드
     [SerializeField] private Transform _objectB;                        // 테스트 대상 오브젝트 B 연결
     [SerializeField] private RevoluteJointComponent _jointComponent;    // 회전축 참조용 컴포넌트
     [SerializeField] private float _rotateSpeed = 10f;                  // 마우스 드래그 감도
     [SerializeField] private bool _useMouseY = true;                    // 마우스 입력 방향 (true: 위아래, false: 좌우)
 
-    private Rigidbody _rigidbodyB;          // 오브젝트 B 리지드바디
-    private Quaternion _pendingRotation;    // 목표 회전값 임시 저장 (Update → FixedUpdate 전달용)
-    private bool _hasPending;               // 이번 프레임에 입력이 있었는지 여부
+    // 런타임 필드
+    private Vector3 _centerPoint;           // [2026.04.22 추가] lineB 시작점 (위치 보정 기준)
+    private Vector3 _centerOffset;          // [2026.04.22 추가] 중심점과 오브젝트 B position 의 차이
+    private Quaternion _fixedRotation;      // [2026.04.22 추가] 누적 회전값
 
     private void Start()
     {
-        // 오브젝트 B 의 Rigidbody 컴포넌트를 가져온다.
-        _rigidbodyB = _objectB.GetComponent<Rigidbody>();
-
-        // Rigidbody 가 없으면 경고 출력
-        if (_rigidbodyB == null)
+        if (_objectB == null)
         {
             Debug.LogWarning("RevoluteFreezeTestManager: 움직일 오브젝트(Object B)가 연결되지 않았습니다. \nInspector 에서 오브젝트를 연결해주세요.");
+            return;
         }
+
+        if (_jointComponent == null)
+        {
+            Debug.LogWarning("RevoluteFreezeTestManager: JointComponent 가 연결되지 않았습니다. \nInspector 에서 오브젝트를 연결해주세요.");
+            return;
+        }
+
+        // [2026.04.22 추가] 중심점, offset, 초기 회전값 한 번만 계산
+        _centerPoint = _jointComponent.LineBCenter;
+        _centerOffset = _objectB.position - _centerPoint;
+        _fixedRotation = _objectB.rotation;
+
+        // [2026.04.22 추가] 클램프 후 offset, rotation 동기화 콜백 등록
+        _jointComponent.OnClampedCallback = (clampedRot) =>
+        {
+            Quaternion delta = clampedRot * Quaternion.Inverse(_fixedRotation);
+            _centerOffset = delta * _centerOffset;
+            _fixedRotation = clampedRot;
+        };
     }
 
     /**
-     * @brief  마우스 오른쪽 버튼을 누르고 드래그하면 목표 회전값을 _pendingRotation 에 저장한다.
-     *         마우스 입력은 Update 에서만 읽어야 하므로 물리 적용은 FixedUpdate 에 위임한다.
+     * @brief  마우스 오른쪽 버튼을 누르고 드래그하면 목표 회전값과 위치를 계산하여
+     *         Transform 직접 제어로 즉시 적용한다.
      */
     private void Update()
     {
-        // Rigidbody 가 없으면 이하 코드 실행하지 않는다.
-        if (_rigidbodyB == null) return;
+        if (_objectB == null) return;
 
-        // JointComponent 가 없으면 이하 코드 실행하지 않는다.
         if (_jointComponent == null)
         {
             Debug.LogWarning("RevoluteFreezeTestManager: JointComponent 가 연결되지 않았습니다. \nInspector 에서 오브젝트를 연결해주세요.");
@@ -54,31 +75,20 @@ public class RevoluteFreezeTestManager : MonoBehaviour
             float delta = Input.GetAxis(_useMouseY ? "Mouse Y" : "Mouse X") *
                 _rotateSpeed * Time.deltaTime;
 
-            // 회전축 가져오기
+            // lineB.Direction 기준 회전축
             Vector3 rotationAxis = _jointComponent.ObjectBRotationAxis;
 
             // 회전 변화량을 Quaternion 으로 변환
             Quaternion rotation = Quaternion.AngleAxis(delta, rotationAxis);
 
-            // 목표 회전값 계산 후 저장 (물리 적용은 FixedUpdate 에 위임)
-            _pendingRotation = rotation * _rigidbodyB.rotation;
-            _hasPending = true;
-        }
-        else
-        {
-            _hasPending = false;  // 버튼 안 누르면 초기화
-        }
-    }
+            // [2026.04.22 수정] Transform 직접 제어로 즉시 적용
+            // offset 을 회전시켜 중심점 기준 위치 보정
+            _centerOffset = rotation * _centerOffset;
+            _objectB.position = _centerPoint + _centerOffset;  // 위치 즉시 적용
 
-    /**
-     * @brief  매 물리 프레임 _pendingRotation 을 읽어 오브젝트 B 를 회전시킨다.
-     *         Rigidbody.MoveRotation() 은 물리 연산이므로 FixedUpdate 에서 호출한다.
-     */
-    private void FixedUpdate()
-    {
-        // 입력값이 없으면 실행하지 않는다.
-        if (_rigidbodyB == null || !_hasPending) return;
-
-        _rigidbodyB.MoveRotation(_pendingRotation);
+            // 누적 회전값 업데이트 후 즉시 적용
+            _fixedRotation = rotation * _fixedRotation;
+            _objectB.rotation = _fixedRotation;  // 회전 즉시 적용
+        }
     }
 }

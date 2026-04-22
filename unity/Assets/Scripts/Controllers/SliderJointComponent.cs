@@ -3,7 +3,15 @@
 // 역할    : SliderJoint 를 씬 오브젝트에 연결하는 MonoBehaviour 컴포넌트
 // 작성자  : 이현화
 // 작성일  : 2026-04-01
-// 수정이력: 
+// 수정이력: 2026-04-22 - _lineAPointA/B, _lineBPointA/B 추가 (ConstraintAssemblyWindow 에서 저장)
+//                      - _planeAPointA/B/C, _planeBPointA/B/C 추가 (ConstraintAssemblyWindow 에서 저장)
+//                      - InitializeJoint() 에서 저장된 점 좌표로 Line, Plane 생성하도록 변경
+//                      - _initialPosition 추가 (SetPosition 기준점으로 사용)
+//                      - SetPosition() 에서 _objectA.position 대신 _initialPosition 사용
+//                      - OnConstrained() 기준점을 _initialPosition 으로 통일
+//                        (SetPosition() 과 기준점 불일치로 인한 위치 누적 오차 수정)
+//                      - Rigidbody 제거, Transform 직접 제어 방식으로 리팩토링
+//                        (디지털 트윈 특성상 물리 엔진 불필요)
 // ============================================================
 
 using UnityEngine;
@@ -14,10 +22,25 @@ public class SliderJointComponent : JointComponent
     [SerializeField] private float _maxPosition = 100f;                  // 최대 이동 범위 - 오브젝트 A 위치 기준 절대값 (mm)
     [SerializeField] private Vector3 _moveDirection = Vector3.right;     // 슬라이더 이동 방향
 
-    private SliderJoint _joint;          // SliderJoint.cs 인스턴스
+    // [2026.04.22 추가] ConstraintAssemblyWindow 에서 저장된 이동축 Line 점 좌표
+    [SerializeField] private Vector3 _lineAPointA;  // Object A 이동축 Line 시작점
+    [SerializeField] private Vector3 _lineAPointB;  // Object A 이동축 Line 끝점
+    [SerializeField] private Vector3 _lineBPointA;  // Object B 이동축 Line 시작점
+    [SerializeField] private Vector3 _lineBPointB;  // Object B 이동축 Line 끝점
+
+    // [2026.04.22 추가] ConstraintAssemblyWindow 에서 저장된 기준 Plane 점 좌표
+    [SerializeField] private Vector3 _planeAPointA;  // Object A 기준 Plane 점 A
+    [SerializeField] private Vector3 _planeAPointB;  // Object A 기준 Plane 점 B
+    [SerializeField] private Vector3 _planeAPointC;  // Object A 기준 Plane 점 C
+    [SerializeField] private Vector3 _planeBPointA;  // Object B 기준 Plane 점 A
+    [SerializeField] private Vector3 _planeBPointB;  // Object B 기준 Plane 점 B
+    [SerializeField] private Vector3 _planeBPointC;  // Object B 기준 Plane 점 C
+
+    private SliderJoint _joint;             // SliderJoint.cs 인스턴스
+    private Vector3 _initialPosition;       // [2026.04.22 추가] 오브젝트 B 초기 위치 (SetPosition 기준점)
 
     public float CurrentPosition => _joint?.CurrentPosition ?? 0f;   // 현재 슬라이더 위치
-    public Vector3 MoveDirection => _moveDirection;                  // 슬라이더 이동 방향
+    public Vector3 MoveDirection => _moveDirection;                   // 슬라이더 이동 방향
 
     /**
      * @brief  이동 방향 벡터 정규화 후 SliderJoint 를 초기화한다.
@@ -26,6 +49,9 @@ public class SliderJointComponent : JointComponent
     {
         // 이동 방향 벡터 정규화 (GetProjectedDistance 거리 계산 및 위치 계산 정확도 보장)
         _moveDirection = _moveDirection.normalized;
+
+        // [2026.04.22 추가] 오브젝트 B 초기 위치 저장 (SetPosition 기준점)
+        _initialPosition = _objectB.position;
 
         InitializeJoint();
 
@@ -39,7 +65,6 @@ public class SliderJointComponent : JointComponent
     protected override bool IsJointValid()
     {
         if (_joint == null) return false;
-
         return _joint.IsValid();
     }
 
@@ -57,19 +82,23 @@ public class SliderJointComponent : JointComponent
     /**
      * @brief  구속 상태일 때 슬라이더 위치를 제한한다.
      *         범위를 벗어난 경우에만 클램프하여 강제 이동시키고,
-     *         범위 내에 있을 때는 프리즈된 축 내에서 자유롭게 움직이도록 로직 상태만 동기화한다.
+     *         범위 내에 있을 때는 _initialPosition 기준 현재 위치를 상태값에 반영한다.
+     *         SetPosition() 과 동일한 기준점(_initialPosition) 을 사용하여
+     *         _joint.CurrentPosition 누적 오차를 방지한다.
      */
     protected override void OnConstrained()
     {
-        // 현재 물리적 위치에서의 거리를 로컬로 계산
-        float currentPos = Vector3.Dot(_objectB.position - _objectA.position, _moveDirection);
+        // [2026.04.22 수정] _initialPosition 기준으로 현재 위치 계산
+        // SetPosition() 과 동일한 기준점을 사용하여 _joint.CurrentPosition 일관성 유지
+        float currentPos = Vector3.Dot(_objectB.position - _initialPosition, _moveDirection);
 
         // 범위를 벗어났을 때만 클램프 적용
-        // 범위 내에 있을 때는 _currentPosition을 직접 측정값으로 동기화하여 떨림 방지
+        // 범위 내에 있을 때는 _currentPosition 을 직접 측정값으로 동기화하여 떨림 방지
         if (currentPos < _minPosition || currentPos > _maxPosition)
         {
-            Vector3 clampedPos = _joint.GetClampedPosition(_objectB.position, _objectA.position, _moveDirection);
-            _rigidbodyB.MovePosition(clampedPos);
+            // [2026.04.22 수정] _initialPosition 기준으로 클램프 위치 계산 (SetPosition() 과 기준점 통일)
+            // [2026.04.22 수정] MovePosition → Transform 직접 제어
+            _objectB.position = _joint.GetClampedPosition(_objectB.position, _initialPosition, _moveDirection);
         }
         else
         {
@@ -81,26 +110,21 @@ public class SliderJointComponent : JointComponent
     /**
      * @brief  외부에서 슬라이더 위치를 설정한다.
      *         ShuttleController.cs 에서 X·Y 바퀴 위치 제어 시 호출한다.
-     *         Rigidbody.MovePosition()과 Transform.position을 즉시 동기화하여
-     *         Update() → OnConstrained() 실행 시 타이밍 충돌을 방지하고
      *         프레임 지연 없이 즉각적인 위치 제어를 수행한다.
-     * @param  position    설정할 슬라이더 위치 (mm)
+     * @param  position    설정할 슬라이더 위치 (m)
      */
     public void SetPosition(float position)
     {
-        if (_joint == null || _rigidbodyB == null) return;
+        if (_joint == null) return;
 
         // 로직 클래스의 상태값을 먼저 업데이트 (내부에서 min/max 클램프 처리됨)
         _joint.SetPosition(position);
 
-        // 클램프된 결과값(_joint.CurrentPosition)을 바탕으로 목표 월드 좌표 계산
-        Vector3 targetWorldPos = _objectA.position + (_moveDirection.normalized * _joint.CurrentPosition);
-
-        // 물리 이동 명령 및 Transform 즉시 동기화
-        // Transform을 즉시 반영하여 다음 Update/FixedUpdate에서
-        // OnConstrained()가 이전 위치를 기준으로 재계산하는 문제를 방지
-        _rigidbodyB.MovePosition(targetWorldPos);
-        _objectB.position = targetWorldPos;
+        // [2026.04.22 수정] _initialPosition 기준으로 목표 월드 좌표 계산
+        // OnConstrained() 와 동일한 기준점(_initialPosition) 을 사용하여
+        // _joint.CurrentPosition 누적 오차 방지
+        // [2026.04.22 수정] MovePosition → Transform 직접 제어
+        _objectB.position = _initialPosition + (_moveDirection.normalized * _joint.CurrentPosition);
     }
 
     /**
@@ -120,48 +144,15 @@ public class SliderJointComponent : JointComponent
     {
         if (_objectA == null || _objectB == null) return;
 
-        // 오브젝트 A·B 의 Transform 에서 이동축 Line 생성
-        Line lineA = new Line(_objectA.position,
-                              _objectA.position + _moveDirection);
-        Line lineB = new Line(_objectB.position,
-                              _objectB.position + _moveDirection);
+        // [2026.04.22 수정] 저장된 점 좌표로 Line 생성
+        Line lineA = new Line(_lineAPointA, _lineAPointB);
+        Line lineB = new Line(_lineBPointA, _lineBPointB);
 
-        // 오브젝트 A·B 의 Transform 에서 기준 Plane 생성
-        // _objectA.right, _objectA.forward 로 면의 세 점 정의
-        Plane planeA = new Plane(_objectA.position,
-                                 _objectA.position + _objectA.right,
-                                 _objectA.position + _objectA.forward);
-        Plane planeB = new Plane(_objectB.position,
-                                 _objectB.position + _objectB.right,
-                                 _objectB.position + _objectB.forward);
+        // [2026.04.22 수정] 저장된 점 좌표로 Plane 생성
+        Plane planeA = new Plane(_planeAPointA, _planeAPointB, _planeAPointC);
+        Plane planeB = new Plane(_planeBPointA, _planeBPointB, _planeBPointC);
 
         // SliderJoint.cs 인스턴스 생성
-        _joint = new SliderJoint(lineA, lineB,
-                                 planeA, planeB,
-                                 _minPosition, _maxPosition);
-    }
-
-    /**
-     * @brief  슬라이더 이동 방향 축을 감지하여 해당 축만 열어두고
-     *         나머지 이동 및 회전을 프리즈한 RigidbodyConstraints 를 반환한다.
-     * @return RigidbodyConstraints  이동 방향 축만 열어둔 프리즈 조건
-     */
-    protected override RigidbodyConstraints GetFreezeConstraintByDirection()
-    {
-        // 이동 방향과 각 축의 유사도 계산
-        // Dot 결과값이 클수록 해당 축과 방향이 일치함을 의미
-        // ex) _moveDirection = (1,0,0) 이면 dotX = 1.0, dotY = 0.0, dotZ = 0.0
-        float dotX = Mathf.Abs(Vector3.Dot(_moveDirection, Vector3.right));
-        float dotY = Mathf.Abs(Vector3.Dot(_moveDirection, Vector3.up));
-        float dotZ = Mathf.Abs(Vector3.Dot(_moveDirection, Vector3.forward));
-
-        // 세 축 중 Dot 값이 가장 큰 축이 이동 방향 축
-        // 해당 축의 FreezePosition 만 제외하고 나머지는 전부 프리즈
-        if (dotX >= dotY && dotX >= dotZ)
-            return RigidbodyConstraints.FreezeAll & ~RigidbodyConstraints.FreezePositionX;
-        else if (dotY >= dotX && dotY >= dotZ)
-            return RigidbodyConstraints.FreezeAll & ~RigidbodyConstraints.FreezePositionY;
-        else
-            return RigidbodyConstraints.FreezeAll & ~RigidbodyConstraints.FreezePositionZ;
+        _joint = new SliderJoint(lineA, lineB, planeA, planeB, _minPosition, _maxPosition);
     }
 }
