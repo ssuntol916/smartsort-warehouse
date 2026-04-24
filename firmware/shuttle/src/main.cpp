@@ -22,25 +22,25 @@ const int STOP_US_Y_RIGHT = 1500;
 
 // X축 캘리브레이션 펄스 (µs) — 실측값
 const int X_FWD_US_L = 1800;   // 전진 좌측
-const int X_FWD_US_R = 1250;   // 전진 우측
-const int X_REV_US_L = 1250;   // 후진 좌측
+const int X_FWD_US_R = 1200;   // 전진 우측
+const int X_REV_US_L = 1200;   // 후진 좌측
 const int X_REV_US_R = 1800;   // 후진 우측
 
 // Y축 캘리브레이션 펄스 (µs) — 실측값
 const int Y_FWD_US_L = 1800;   // 전진 좌측
-const int Y_FWD_US_R = 1250;   // 전진 우측
-const int Y_REV_US_L = 1250;   // 후진 좌측
+const int Y_FWD_US_R = 1200;   // 전진 우측
+const int Y_REV_US_L = 1200;   // 후진 좌측
 const int Y_REV_US_R = 1800;   // 후진 우측
 
 // µs 기반 램프 설정
-const int RAMP_US_STEP     = 25;   // 1스텝당 µs 변화량
-const int RAMP_US_DELAY_MS = 20;   // 스텝 간 대기시간
+const int RAMP_US_STEP     = 5;   // 1스텝당 µs 변화량
+const int RAMP_US_DELAY_MS = 10;   // 스텝 간 대기시간
 
 // ============================================================
 // MQTT 설정
 // ============================================================
 const int MQTT_PORT = 1883;
-const char* MQTT_CLIENT_ID = "smartsort-shuttle-esp32";
+const char* MQTT_CLIENT_ID = "smartsort-shuttle";
 
 // 구독 토픽
 const char* TOPIC_CMD_SHUTTLE = "warehouse/cmd/shuttle";
