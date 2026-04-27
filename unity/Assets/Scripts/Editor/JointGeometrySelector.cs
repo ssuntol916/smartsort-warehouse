@@ -214,25 +214,14 @@ public class JointGeometrySelector
      */
     private void HandleEdgeMode(Event e, Ray ray, Camera camera)
     {
-        // Ctrl 누름: 회전축 탐색 모드 전환
-        if (e.type == EventType.KeyDown &&
-            (e.keyCode == KeyCode.LeftControl || e.keyCode == KeyCode.RightControl))
+        // Ctrl 상태를 modifier 로 동기화 (Scene View 미활성화 상태에서도 동작)
+        bool ctrlNow = e.control;
+        if (ctrlNow != _isAxisMode)
         {
-            _isAxisMode = true;
+            _isAxisMode = ctrlNow;
+            if (!_isAxisMode) _hoveredAxis = null;
             UpdateEdgeHover(ray, e.mousePosition, camera);
             SceneView.RepaintAll();
-            return;
-        }
-
-        // Ctrl 뗌: 일반 Edge 탐색 모드 전환
-        if (e.type == EventType.KeyUp &&
-            (e.keyCode == KeyCode.LeftControl || e.keyCode == KeyCode.RightControl))
-        {
-            _isAxisMode = false;
-            _hoveredAxis = null;
-            UpdateEdgeHover(ray, e.mousePosition, camera);
-            SceneView.RepaintAll();
-            return;
         }
 
         // 마우스 이동: Face 호버 → 경계 Edge 계산 → 근접 Edge 갱신
