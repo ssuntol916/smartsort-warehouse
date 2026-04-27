@@ -24,10 +24,10 @@ public static class MeshGeometryPicker
     private const float CoplanarAngleTolerance = 0.01f;
 
     // 원통 축 탐지 파라미터
-    private const int   CylinderMinEdges       = 7;
-    private const float ParallelAngleTol       = 2f;    // 나란함 판정 각도 오차 (도)
+    private const int   CylinderMinEdges       = 10;
+    private const float ParallelAngleTol       = 0.1f;    // 나란함 판정 각도 오차 (도)
     private const int   RansacIterations       = 50;
-    private const float RansacInlierRadiusFrac = 0.05f; // 반지름 대비 inlier 허용 오차
+    private const float RansacInlierRadiusFrac = 0.01f; // 반지름 대비 inlier 허용 오차
 
     // 메쉬별 고유 edge 캐시 (로컬 좌표)
     private static readonly Dictionary<int, List<(Vector3, Vector3)>> _edgeCache
@@ -285,16 +285,21 @@ public static class MeshGeometryPicker
         if (parallel.Count < CylinderMinEdges) return false;
 
         // 2. edge 방향을 법선으로 하는 평면에 선분 중점을 사영
-        Vector3 refPoint = (seedEdge.Item1 + seedEdge.Item2) * 0.5f;
-        var projected = new List<Vector3>(parallel.Count);
-        foreach (var e in parallel)
+        Vector3 refPoint = seedEdge.Item1;
+        var projected   = new List<Vector3>(parallel.Count);
+        int  seedIdx    = 0;
+        float minDistSq = float.MaxValue;
+        for (int i = 0; i < parallel.Count; i++)
         {
-            Vector3 mid = (e.Item1 + e.Item2) * 0.5f;
-            projected.Add(mid - Vector3.Dot(mid - refPoint, edgeDir) * edgeDir);
+            Vector3 proj = parallel[i].Item1 - Vector3.Dot(parallel[i].Item1 - refPoint, edgeDir) * edgeDir;
+            projected.Add(proj);
+            float dSq = Vector3.SqrMagnitude(proj - refPoint);
+            if (dSq < minDistSq) { minDistSq = dSq; seedIdx = i; }
         }
 
-        // 3. 사영점이 원을 이루는지 RANSAC
-        if (!RansacCircle(projected, edgeDir, out Vector3 circleCenter))
+
+        // 3. 사영점이 원을 이루는지 RANSAC (seedIdx 점 강제 포함)
+        if (!RansacCircle(projected, edgeDir, seedIdx, out Vector3 circleCenter))
             return false;
 
         // 4. 회전축은 RANSAC 원 중심에 선분 방향
@@ -476,7 +481,7 @@ public static class MeshGeometryPicker
      * @param[out]  center3D    원의 중심 (3D 월드 좌표)
      */
     private static bool RansacCircle(
-        List<Vector3> pts3D, Vector3 planeNormal, out Vector3 center3D)
+        List<Vector3> pts3D, Vector3 planeNormal, int anchorIdx, out Vector3 center3D)
     {
         center3D = Vector3.zero;
         int n = pts3D.Count;
@@ -498,8 +503,8 @@ public static class MeshGeometryPicker
 
         for (int iter = 0; iter < RansacIterations; iter++)
         {
-            int i0 = rng.Next(n), i1 = rng.Next(n), i2 = rng.Next(n);
-            if (i0 == i1 || i1 == i2 || i0 == i2) continue;
+            int i0 = anchorIdx, i1 = rng.Next(n), i2 = rng.Next(n);
+            if (i0 == i1 || i0 == i2 || i1 == i2) continue;
             if (!Circumcircle2D(pts[i0], pts[i1], pts[i2], out Vector2 c, out float r)) continue;
 
             float tol   = r * RansacInlierRadiusFrac;
