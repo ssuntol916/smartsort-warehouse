@@ -23,6 +23,16 @@ public static class MeshGeometryPicker
     // 동일면(coplanar) 판단 기준 각도 허용 오차 (도)
     private const float CoplanarAngleTolerance = 0.01f;
 
+    // 원통 축 탐지 파라미터
+    private const int   CylinderMinEdges       = 7;
+    private const float ParallelAngleTol       = 2f;    // 나란함 판정 각도 오차 (도)
+    private const int   RansacIterations       = 50;
+    private const float RansacInlierRadiusFrac = 0.05f; // 반지름 대비 inlier 허용 오차
+
+    // 메쉬별 고유 edge 캐시 (로컬 좌표)
+    private static readonly Dictionary<int, List<(Vector3, Vector3)>> _edgeCache
+        = new Dictionary<int, List<(Vector3, Vector3)>>();
+
     // ============================================================
     // Raycast 및 MeshFilter 탐색
     // ============================================================
@@ -246,6 +256,53 @@ public static class MeshGeometryPicker
         return new Line(edge.Item1, edge.Item2);
     }
     // ============================================================
+    // Cylinder Axis 탐지
+    // ============================================================
+    /**
+     * @brief   hover 삼각형의 가장 가까운 edge 로부터 원통면 회전축을 탐색.
+     *          1) seedEdge 와 나란한 선분을 메쉬 전체에서 탐색 (< 7개면 실패)
+     *          2) 각 선분의 중점을 edge 방향 수직 평면에 사영
+     *          3) 사영점이 원을 이루는지 RANSAC 검증 (inlier < 7개면 실패)
+     * @param   mesh            대상 Mesh
+     * @param   meshTransform   대상 Transform
+     * @param   seedEdge        월드 좌표 기준 edge (hover 삼각형의 최근접 edge)
+     * @param[out]  axisLine    원통 회전축 Line
+     * @return  bool            축 탐지 성공 여부
+     */
+    public static bool TryGetCylinderAxis(
+        Mesh mesh,
+        Transform meshTransform,
+        (Vector3, Vector3) seedEdge,
+        out Line axisLine)
+    {
+        axisLine = default;
+
+        Vector3 edgeDir = (seedEdge.Item2 - seedEdge.Item1).normalized;
+        if (edgeDir == Vector3.zero) return false;
+
+        // 1. 나란한 선분 탐색
+        var parallel = FindParallelEdges(mesh, meshTransform, edgeDir);
+        if (parallel.Count < CylinderMinEdges) return false;
+
+        // 2. edge 방향을 법선으로 하는 평면에 선분 중점을 사영
+        Vector3 refPoint = (seedEdge.Item1 + seedEdge.Item2) * 0.5f;
+        var projected = new List<Vector3>(parallel.Count);
+        foreach (var e in parallel)
+        {
+            Vector3 mid = (e.Item1 + e.Item2) * 0.5f;
+            projected.Add(mid - Vector3.Dot(mid - refPoint, edgeDir) * edgeDir);
+        }
+
+        // 3. 사영점이 원을 이루는지 RANSAC
+        if (!RansacCircle(projected, edgeDir, out Vector3 circleCenter))
+            return false;
+
+        // 4. 회전축은 RANSAC 원 중심에 선분 방향
+        axisLine = new Line(circleCenter, circleCenter + edgeDir);
+        return true;
+    }
+
+    // ============================================================
     // 내부 유틸리티
     // ============================================================
     /**
@@ -361,5 +418,122 @@ public static class MeshGeometryPicker
         if (len2 < 1e-6f) return Vector2.Distance(p, a);
         float t = Mathf.Clamp01(Vector2.Dot(p - a, ab) / len2);
         return Vector2.Distance(p, a + t * ab);
+    }
+
+    /**
+     * @brief   worldDir 과 나란한 메쉬 edge 를 월드 좌표로 반환. (캐시 활용)
+     */
+    private static List<(Vector3, Vector3)> FindParallelEdges(
+        Mesh mesh, Transform meshTransform, Vector3 worldDir)
+    {
+        var result = new List<(Vector3, Vector3)>();
+        foreach (var le in GetCachedEdges(mesh))
+        {
+            Vector3 wA  = meshTransform.TransformPoint(le.Item1);
+            Vector3 wB  = meshTransform.TransformPoint(le.Item2);
+            Vector3 dir = (wB - wA).normalized;
+            if (dir == Vector3.zero) continue;
+            float angle = Vector3.Angle(dir, worldDir);
+            if (angle < ParallelAngleTol || angle > 180f - ParallelAngleTol)
+                result.Add((wA, wB));
+        }
+        return result;
+    }
+
+    /**
+     * @brief   메쉬의 고유 edge 목록을 로컬 좌표로 반환. 메쉬 인스턴스 ID 기준 캐싱.
+     */
+    private static List<(Vector3, Vector3)> GetCachedEdges(Mesh mesh)
+    {
+        int id = mesh.GetInstanceID();
+        if (_edgeCache.TryGetValue(id, out var cached)) return cached;
+
+        int[]     tris  = mesh.triangles;
+        Vector3[] verts = mesh.vertices;
+        var edgeSet = new HashSet<(int, int)>();
+        var edges   = new List<(Vector3, Vector3)>();
+        for (int i = 0; i < tris.Length; i += 3)
+        {
+            TryCacheEdge(edgeSet, edges, verts, tris[i],     tris[i + 1]);
+            TryCacheEdge(edgeSet, edges, verts, tris[i + 1], tris[i + 2]);
+            TryCacheEdge(edgeSet, edges, verts, tris[i + 2], tris[i]);
+        }
+        _edgeCache[id] = edges;
+        return edges;
+    }
+
+    private static void TryCacheEdge(
+        HashSet<(int, int)> set, List<(Vector3, Vector3)> edges, Vector3[] verts, int a, int b)
+    {
+        var key = a < b ? (a, b) : (b, a);
+        if (!set.Add(key)) return;
+        edges.Add((verts[a], verts[b]));
+    }
+
+    /**
+     * @brief   3D 사영점 목록이 원을 이루는지 RANSAC 으로 검증.
+     *          planeNormal 을 법선으로 하는 평면 위 2D 좌표계에서 외접원 피팅.
+     * @param[out]  center3D    원의 중심 (3D 월드 좌표)
+     */
+    private static bool RansacCircle(
+        List<Vector3> pts3D, Vector3 planeNormal, out Vector3 center3D)
+    {
+        center3D = Vector3.zero;
+        int n = pts3D.Count;
+        if (n < CylinderMinEdges) return false;
+
+        // 평면 위 2D 좌표계 구성
+        Vector3 axisU = Vector3.Cross(planeNormal,
+            Mathf.Abs(planeNormal.x) < 0.9f ? Vector3.right : Vector3.up).normalized;
+        Vector3 axisV     = Vector3.Cross(planeNormal, axisU).normalized;
+        float   planeOff  = Vector3.Dot(pts3D[0], planeNormal);
+
+        var pts = new Vector2[n];
+        for (int i = 0; i < n; i++)
+            pts[i] = new Vector2(Vector3.Dot(pts3D[i], axisU), Vector3.Dot(pts3D[i], axisV));
+
+        int     bestCount  = 0;
+        Vector2 bestCenter = Vector2.zero;
+        var     rng        = new System.Random(0);
+
+        for (int iter = 0; iter < RansacIterations; iter++)
+        {
+            int i0 = rng.Next(n), i1 = rng.Next(n), i2 = rng.Next(n);
+            if (i0 == i1 || i1 == i2 || i0 == i2) continue;
+            if (!Circumcircle2D(pts[i0], pts[i1], pts[i2], out Vector2 c, out float r)) continue;
+
+            float tol   = r * RansacInlierRadiusFrac;
+            int   count = 0;
+            foreach (var p in pts)
+            {
+                float d = Vector2.Distance(p, c);
+                if (d >= r - tol && d <= r + tol) count++;
+            }
+            if (count > bestCount) { bestCount = count; bestCenter = c; }
+        }
+
+        if (bestCount < CylinderMinEdges) return false;
+        center3D = bestCenter.x * axisU + bestCenter.y * axisV + planeOff * planeNormal;
+        return true;
+    }
+
+    /**
+     * @brief   세 점의 외접원(center, radius) 계산.
+     */
+    private static bool Circumcircle2D(
+        Vector2 a, Vector2 b, Vector2 c, out Vector2 center, out float radius)
+    {
+        float D = 2f * (a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y));
+        center = Vector2.zero; radius = 0f;
+        if (Mathf.Abs(D) < 1e-6f) return false;
+
+        float a2 = a.x * a.x + a.y * a.y;
+        float b2 = b.x * b.x + b.y * b.y;
+        float c2 = c.x * c.x + c.y * c.y;
+        center = new Vector2(
+            (a2 * (b.y - c.y) + b2 * (c.y - a.y) + c2 * (a.y - b.y)) / D,
+            (a2 * (c.x - b.x) + b2 * (a.x - c.x) + c2 * (b.x - a.x)) / D);
+        radius = Vector2.Distance(center, a);
+        return radius > 1e-6f;
     }
 }
