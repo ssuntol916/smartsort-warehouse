@@ -324,18 +324,18 @@ public class JointGeometrySelector
         switch(Mode)
         {
             case SelectionMode.Face:    modeStr = "Face"; break;
-            case SelectionMode.Edge:    modeStr = _isAxisMode ? "Axis" : "Edge"; 
+            case SelectionMode.Edge:    modeStr = _isAxisMode ? "Axis" : "Edge";
                                         hint = "(Ctrl: Axis 탐색)"; break;
         }
         switch(Step)
         {
-            case SelectionStep.WaitA:   stepStr = "Object A"; break;
-            case SelectionStep.WaitB:   stepStr = "Object B"; break;
+            case SelectionStep.WaitA:   stepStr = "Object A (기준 요소)"; break;
+            case SelectionStep.WaitB:   stepStr = "Object B (이동 요소)"; break;
         }
 
         GUI.Label(
             new Rect(10, 30, 620, 22),
-            $"[Joint Geometry Selector]  {modeStr} 선택 중  —  {stepStr}를 클릭하세요  (Esc: 취소) {hint}",
+            $"{modeStr} 선택 중  —  {stepStr}를 클릭하세요  (Esc: 취소) {hint}",
             EditorStyles.boldLabel);
         Handles.EndGUI();
 

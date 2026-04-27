@@ -1,7 +1,7 @@
 // ============================================================
 // 파일명  : RevoluteJointComponentEditor.cs
 // 역할    : RevoluteJointComponent 커스텀 Inspector
-//           Scene View 에서 회전축 Edge 선택으로 Line 을 생성하는 UI를 제공한다.
+//           Scene View 에서 회전축 Axis 선택으로 Line 을 생성하는 UI를 제공한다.
 //           선택된 Line 정보(pointA, pointB, 방향)를 Inspector에 표시한다.
 // 작성자  : 이건호
 // 작성일  : 2026-04-02
@@ -40,41 +40,41 @@ public class RevoluteJointComponentEditor : Editor
         // GUI 설정
         // - 'RevoluteJoint' 정보
         EditorGUILayout.LabelField("RevoluteJoint 설정", EditorStyles.boldLabel);
-        EditorGUILayout.PropertyField(_objectA,  new GUIContent("Object A (회전축 기준)"));
-        EditorGUILayout.PropertyField(_objectB,  new GUIContent("Object B (회전 대상)"));
+        EditorGUILayout.PropertyField(_objectA,  new GUIContent("Object A (기준 요소)"));
+        EditorGUILayout.PropertyField(_objectB,  new GUIContent("Object B (이동 요소)"));
         EditorGUILayout.PropertyField(_minAngle, new GUIContent("최소 각도 (°)"));
         EditorGUILayout.PropertyField(_maxAngle, new GUIContent("최대 각도 (°)"));
 
         EditorGUILayout.Space(10);
 
-        // - Edge 지정상태 GUI
-        EditorGUILayout.LabelField("메시 Edge 선택으로 회전축 지정", EditorStyles.boldLabel);
-        DrawLineField("Object A 회전축", _axisLineA);
-        DrawLineField("Object B 회전축", _axisLineB);
+        // - Axis 지정상태 GUI
+        EditorGUILayout.LabelField("메시 Axis(회전축) 선택으로 회전축 지정", EditorStyles.boldLabel);
+        DrawLineField("Object A - Axis", _axisLineA);
+        DrawLineField("Object B - Axis", _axisLineB);
 
         EditorGUILayout.Space(6);
 
-        // - Edge 선택 버튼
+        // - Axis 선택 버튼
         var selector = JointGeometrySelector.Instance;
         bool isSelectingEdge = selector.Mode == JointGeometrySelector.SelectionMode.Edge;
         bool isSelecting     = selector.Mode != JointGeometrySelector.SelectionMode.None;
 
         using (new EditorGUI.DisabledScope(isSelecting))
         {
-            // Button 이 선택되면 'JointGeometrySelector' 호출. Scene View 에서 Edge 를 선택하도록 한다.
-            if (GUILayout.Button("Scene View에서 회전축 Edge 선택  (A → B 순서)"))
+            // Button 이 선택되면 'JointGeometrySelector' 호출. Scene View 에서 Axis 를 선택하도록 한다.
+            if (GUILayout.Button("Scene View에서 Axis 선택"))
             {
                 selector.StartEdgeSelection(
                     line => { _axisLineA = line; Repaint(); },
                     line => { _axisLineB = line; Repaint(); });
             }
         }
-        // - Edge 선택 세션 중 표시할 버튼
+        // - Axis 선택 세션 중 표시할 버튼
         if (isSelectingEdge)
         {
             string msg = selector.Step == JointGeometrySelector.SelectionStep.WaitA
-                ? "Object A 회전축 Edge를 Scene View에서 클릭하세요."
-                : "Object B 회전축 Edge를 Scene View에서 클릭하세요.";
+                ? "Object A - Axis를 Scene View에서 클릭하세요."
+                : "Object B - Axis를 Scene View에서 클릭하세요.";
             EditorGUILayout.HelpBox(msg, MessageType.Info);
 
             if (GUILayout.Button("선택 취소"))
