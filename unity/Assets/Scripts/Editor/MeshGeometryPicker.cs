@@ -505,6 +505,7 @@ public static class MeshGeometryPicker
         {
             int i0 = anchorIdx, i1 = rng.Next(n), i2 = rng.Next(n);
             if (i0 == i1 || i0 == i2 || i1 == i2) continue;
+            if (IsCollinear2D(pts[i0], pts[i1], pts[i2])) continue;
             if (!Circumcircle2D(pts[i0], pts[i1], pts[i2], out Vector2 c, out float r)) continue;
 
             float tol   = r * RansacInlierRadiusFrac;
@@ -520,6 +521,12 @@ public static class MeshGeometryPicker
         if (bestCount < CylinderMinEdges) return false;
         center3D = bestCenter.x * axisU + bestCenter.y * axisV + planeOff * planeNormal;
         return true;
+    }
+
+    private static bool IsCollinear2D(Vector2 a, Vector2 b, Vector2 c)
+    {
+        float cross = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+        return Mathf.Abs(cross) < 1e-03f;
     }
 
     /**
