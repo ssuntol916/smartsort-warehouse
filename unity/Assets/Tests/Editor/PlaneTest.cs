@@ -3,7 +3,8 @@
 // 역할    : Plane 클래스 단위 테스트 (EditMode)
 // 작성자  : 이현화
 // 작성일  : 2026-03-25
-// 수정이력:
+// 수정이력: 2026-04-22 - Contains_Point_SmallEpsilonOff_ReturnsFalse 테스트 케이스 수정
+//                        (Tolerance 가 0.01f 로 변경됨에 따라 테스트 기준값 조정)
 // ============================================================
 
 using NUnit.Framework;
@@ -419,10 +420,10 @@ public class PlaneTest
     [Test]
     public void Contains_Point_SmallEpsilonOff_ReturnsFalse()
     {
-        // Tolerance(1e-6) 바로 밖 → false
+        // [2026.04.22 수정]Tolerance(0.01f) 바로 밖 → false
         Plane plane = XYPlane();
 
-        Assert.IsFalse(plane.Contains(new Vector3(0f, 0f, 2e-6f)));
+        Assert.IsFalse(plane.Contains(new Vector3(0f, 0f, 0.02f)));
     }
 
     [Test]

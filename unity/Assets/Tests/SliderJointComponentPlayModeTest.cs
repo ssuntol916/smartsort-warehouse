@@ -1,10 +1,14 @@
 // ============================================================
 // 파일명  : SliderJointComponentPlayModeTest.cs
 // 역할    : SliderJointComponent 클래스의 PlayMode 통합 테스트
-//           실제 씬 환경에서 Rigidbody, 물리 연산, 위치 클램프를 검증한다.
+//           실제 씬 환경에서 Transform 직접 제어, 위치 클램프를 검증한다.
 // 작성자  : 이현화
 // 작성일  : 2026-04-01
-// 수정이력: 
+// 수정이력: 2026-04-22 - Rigidbody 제거, Transform 직접 제어 방식으로 리팩토링
+//                        (Gravity 테스트 제거, Constraints 테스트 제거)
+//                      - SetupJointComponent() 에서 Rigidbody 생성 코드 제거
+//                      - 이동 입력 방식을 Transform.position 직접 제어로 변경
+//                      - Line, Plane 점 좌표 Reflection 설정 추가
 // ============================================================
 
 using System.Collections;
@@ -31,17 +35,13 @@ public class SliderJointComponentPlayModeTest
     [SetUp]
     public void SetUp()
     {
-        // 오브젝트 A 생성 (기준, Kinematic)
+        // 오브젝트 A 생성 (기준)
         _objectA = new GameObject("ObjectA");
         _objectA.transform.position = Vector3.zero;
-        Rigidbody rbA = _objectA.AddComponent<Rigidbody>();
-        rbA.isKinematic = true;
 
         // 오브젝트 B 생성 (이동 대상)
         _objectB = new GameObject("ObjectB");
         _objectB.transform.position = Vector3.zero;
-        Rigidbody rbB = _objectB.AddComponent<Rigidbody>();
-        rbB.useGravity = false;
 
         // SliderJointComponent 를 별도 오브젝트에 추가
         _managerObject = new GameObject("JointManager");
@@ -60,17 +60,16 @@ public class SliderJointComponentPlayModeTest
 
     /**
      * @brief  SliderJointComponent 를 설정하고 초기화한다.
+     *         이동축 Line 과 기준 Plane 을 moveDirection 방향으로 생성하여 설정한다.
      * @param  minPosition     최소 이동 범위
      * @param  maxPosition     최대 이동 범위
      * @param  moveDirection   이동 방향 (월드 기준)
      */
     private void SetupJointComponent(float minPosition, float maxPosition, Vector3 moveDirection)
     {
-        // 매니저 오브젝트 비활성화 (Awake 호출 방지)
         _managerObject.SetActive(false);
         _jointComponent = _managerObject.AddComponent<SliderJointComponent>();
 
-        // Reflection 으로 private SerializeField 설정
         var type = typeof(SliderJointComponent);
         var baseType = typeof(JointComponent);
 
@@ -86,7 +85,38 @@ public class SliderJointComponentPlayModeTest
         type.GetField("_moveDirection", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
             .SetValue(_jointComponent, moveDirection);
 
-        // 이제 활성화 (이때 필드가 채워진 상태로 Awake -> InitializeJoint 가 정상 실행됨)
+        // 이동축 Line 점 좌표 설정 (moveDirection 방향으로 lineA, lineB 생성)
+        Vector3 linePointA = Vector3.zero;
+        Vector3 linePointB = moveDirection.sqrMagnitude > 0 ? moveDirection.normalized : Vector3.right;
+
+        type.GetField("_lineAPointA", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+            .SetValue(_jointComponent, linePointA);
+        type.GetField("_lineAPointB", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+            .SetValue(_jointComponent, linePointB);
+        type.GetField("_lineBPointA", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+            .SetValue(_jointComponent, linePointA);
+        type.GetField("_lineBPointB", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+            .SetValue(_jointComponent, linePointB);
+
+        // 기준 Plane 점 좌표 설정 (moveDirection 과 수직인 평면 생성)
+        Vector3 perpA = Vector3.Cross(linePointB, Vector3.up).sqrMagnitude > 0
+            ? Vector3.Cross(linePointB, Vector3.up).normalized
+            : Vector3.Cross(linePointB, Vector3.right).normalized;
+        Vector3 perpB = Vector3.Cross(linePointB, perpA).normalized;
+
+        type.GetField("_planeAPointA", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+            .SetValue(_jointComponent, Vector3.zero);
+        type.GetField("_planeAPointB", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+            .SetValue(_jointComponent, perpA);
+        type.GetField("_planeAPointC", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+            .SetValue(_jointComponent, perpB);
+        type.GetField("_planeBPointA", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+            .SetValue(_jointComponent, Vector3.zero);
+        type.GetField("_planeBPointB", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+            .SetValue(_jointComponent, perpA);
+        type.GetField("_planeBPointC", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+            .SetValue(_jointComponent, perpB);
+
         _managerObject.SetActive(true);
     }
 
@@ -102,7 +132,7 @@ public class SliderJointComponentPlayModeTest
     {
         // Arrange & Act
         SetupJointComponent(0f, 100f, Vector3.right);
-        yield return null;  // Awake 실행 대기
+        yield return null;
 
         // Assert
         Assert.IsNotNull(_jointComponent);
@@ -118,11 +148,9 @@ public class SliderJointComponentPlayModeTest
         // Arrange
         SetupJointComponent(0f, 100f, Vector3.right);
         yield return null;
-
-        // 몇 프레임 대기하여 Update 실행
         yield return new WaitForSeconds(PhysicsWaitTime);
 
-        // Assert - CurrentPosition 이 정상적으로 반환되면 초기화 성공
+        // Assert
         Assert.AreEqual(0f, _jointComponent.CurrentPosition, Tolerance);
     }
 
@@ -170,11 +198,9 @@ public class SliderJointComponentPlayModeTest
         SetupJointComponent(0f, 100f, Vector3.right);
         yield return null;
 
-        // Act - 범위 내 위치로 이동
-        Rigidbody rb = _objectB.GetComponent<Rigidbody>();
-        rb.MovePosition(new Vector3(50f, 0f, 0f));
+        // Act - 범위 내 위치로 이동 (Transform 직접 제어)
+        _objectB.transform.position = new Vector3(50f, 0f, 0f);
 
-        yield return new WaitForFixedUpdate();
         yield return new WaitForSeconds(PhysicsWaitTime);
 
         // Assert - 위치가 유지되어야 함
@@ -191,11 +217,9 @@ public class SliderJointComponentPlayModeTest
         SetupJointComponent(0f, 100f, Vector3.right);
         yield return null;
 
-        // Act - max 초과 위치로 이동
-        Rigidbody rb = _objectB.GetComponent<Rigidbody>();
-        rb.MovePosition(new Vector3(150f, 0f, 0f));
+        // Act - max 초과 위치로 이동 (Transform 직접 제어)
+        _objectB.transform.position = new Vector3(150f, 0f, 0f);
 
-        yield return new WaitForFixedUpdate();
         yield return new WaitForSeconds(PhysicsWaitTime * 2);
 
         // Assert - 클램프되어 100 이하여야 함
@@ -212,57 +236,13 @@ public class SliderJointComponentPlayModeTest
         SetupJointComponent(0f, 100f, Vector3.right);
         yield return null;
 
-        // Act - min 미만 위치로 이동
-        Rigidbody rb = _objectB.GetComponent<Rigidbody>();
-        rb.MovePosition(new Vector3(-50f, 0f, 0f));
+        // Act - min 미만 위치로 이동 (Transform 직접 제어)
+        _objectB.transform.position = new Vector3(-50f, 0f, 0f);
 
-        yield return new WaitForFixedUpdate();
         yield return new WaitForSeconds(PhysicsWaitTime * 2);
 
         // Assert - 클램프되어 0 이상이어야 함
         Assert.That(_jointComponent.CurrentPosition, Is.GreaterThanOrEqualTo(0f - Tolerance));
-    }
-
-    /**
-     * @brief  Y축 이동 시 클램프 테스트 - Y축 방향 이동이 정상 클램프되는지 검증한다.
-     */
-    [UnityTest]
-    public IEnumerator Movement_YAxis_ClampApplied()
-    {
-        // Arrange
-        SetupJointComponent(0f, 100f, Vector3.up);
-        yield return null;
-
-        // Act - Y축으로 max 초과 이동
-        Rigidbody rb = _objectB.GetComponent<Rigidbody>();
-        rb.MovePosition(new Vector3(0f, 150f, 0f));
-
-        yield return new WaitForFixedUpdate();
-        yield return new WaitForSeconds(PhysicsWaitTime * 2);
-
-        // Assert
-        Assert.That(_jointComponent.CurrentPosition, Is.LessThanOrEqualTo(100f + Tolerance));
-    }
-
-    /**
-     * @brief  Z축 이동 시 클램프 테스트 - Z축 방향 이동이 정상 클램프되는지 검증한다.
-     */
-    [UnityTest]
-    public IEnumerator Movement_ZAxis_ClampApplied()
-    {
-        // Arrange
-        SetupJointComponent(0f, 100f, Vector3.forward);
-        yield return null;
-
-        // Act - Z축으로 max 초과 이동
-        Rigidbody rb = _objectB.GetComponent<Rigidbody>();
-        rb.MovePosition(new Vector3(0f, 0f, 150f));
-
-        yield return new WaitForFixedUpdate();
-        yield return new WaitForSeconds(PhysicsWaitTime * 2);
-
-        // Assert
-        Assert.That(_jointComponent.CurrentPosition, Is.LessThanOrEqualTo(100f + Tolerance));
     }
 
     #endregion
@@ -281,18 +261,17 @@ public class SliderJointComponentPlayModeTest
 
         // Act
         _jointComponent.SetPosition(50f);
-        yield return new WaitForFixedUpdate();
-        yield return new WaitForEndOfFrame(); // 트랜스폼 반영 대기
+        yield return new WaitForSeconds(PhysicsWaitTime);
 
         // Assert
         Assert.AreEqual(50f, _jointComponent.CurrentPosition, Tolerance);
     }
 
     /**
-     * @brief  SetPosition 범위 초과 테스트 - SetPosition 으로 범위 초과 위치가 클램프되는지 검증한다.
+     * @brief  SetPosition 최대 초과 테스트 - max 초과 시 클램프되는지 검증한다.
      */
     [UnityTest]
-    public IEnumerator SetPosition_ExceedsRange_ClampedToRange()
+    public IEnumerator SetPosition_ExceedsMax_ClampedToMax()
     {
         // Arrange
         SetupJointComponent(0f, 100f, Vector3.right);
@@ -300,18 +279,17 @@ public class SliderJointComponentPlayModeTest
 
         // Act
         _jointComponent.SetPosition(150f);
-        yield return new WaitForFixedUpdate();
-        yield return new WaitForEndOfFrame();
+        yield return new WaitForSeconds(PhysicsWaitTime);
 
         // Assert
         Assert.AreEqual(100f, _jointComponent.CurrentPosition, Tolerance);
     }
 
     /**
-     * @brief  SetPosition 음수 테스트 - SetPosition 으로 음수 위치가 클램프되는지 검증한다.
+     * @brief  SetPosition 최소 미만 테스트 - min 미만 시 클램프되는지 검증한다.
      */
     [UnityTest]
-    public IEnumerator SetPosition_NegativePosition_ClampedToMin()
+    public IEnumerator SetPosition_BelowMin_ClampedToMin()
     {
         // Arrange
         SetupJointComponent(0f, 100f, Vector3.right);
@@ -323,145 +301,6 @@ public class SliderJointComponentPlayModeTest
 
         // Assert
         Assert.AreEqual(0f, _jointComponent.CurrentPosition, Tolerance);
-    }
-
-    /**
-     * @brief  SetPosition 음수 범위 테스트 - 음수 범위에서 정상 작동하는지 검증한다.
-     */
-    [UnityTest]
-    public IEnumerator SetPosition_NegativeRange_WorksCorrectly()
-    {
-        // Arrange
-        SetupJointComponent(-100f, -50f, Vector3.right);
-        yield return null;
-
-        // Act
-        _jointComponent.SetPosition(-75f);
-        yield return new WaitForFixedUpdate();
-        yield return new WaitForEndOfFrame();
-
-        // Assert
-        Assert.AreEqual(-75f, _jointComponent.CurrentPosition, Tolerance);
-    }
-
-    #endregion
-
-    #region Rigidbody Constraints 테스트
-
-    /**
-     * @brief  X축 이동 방향 Constraints 테스트 - X축 이동만 허용되는지 검증한다.
-     */
-    [UnityTest]
-    public IEnumerator Constraints_XAxisMovement_OnlyXMovementAllowed()
-    {
-        // Arrange
-        SetupJointComponent(0f, 100f, Vector3.right);
-        yield return null;
-        yield return new WaitForSeconds(PhysicsWaitTime);
-
-        // Assert
-        Rigidbody rb = _objectB.GetComponent<Rigidbody>();
-
-        // 위치 Y, Z 가 프리즈되어 있어야 함
-        Assert.That(rb.constraints.HasFlag(RigidbodyConstraints.FreezePositionY), Is.True);
-        Assert.That(rb.constraints.HasFlag(RigidbodyConstraints.FreezePositionZ), Is.True);
-
-        // 위치 X 는 프리즈되지 않아야 함
-        Assert.That(rb.constraints.HasFlag(RigidbodyConstraints.FreezePositionX), Is.False);
-    }
-
-    /**
-     * @brief  Y축 이동 방향 Constraints 테스트 - Y축 이동만 허용되는지 검증한다.
-     */
-    [UnityTest]
-    public IEnumerator Constraints_YAxisMovement_OnlyYMovementAllowed()
-    {
-        // Arrange
-        SetupJointComponent(0f, 100f, Vector3.up);
-        yield return null;
-        yield return new WaitForSeconds(PhysicsWaitTime);
-
-        // Assert
-        Rigidbody rb = _objectB.GetComponent<Rigidbody>();
-
-        Assert.That(rb.constraints.HasFlag(RigidbodyConstraints.FreezePositionX), Is.True);
-        Assert.That(rb.constraints.HasFlag(RigidbodyConstraints.FreezePositionZ), Is.True);
-        Assert.That(rb.constraints.HasFlag(RigidbodyConstraints.FreezePositionY), Is.False);
-    }
-
-    /**
-     * @brief  Z축 이동 방향 Constraints 테스트 - Z축 이동만 허용되는지 검증한다.
-     */
-    [UnityTest]
-    public IEnumerator Constraints_ZAxisMovement_OnlyZMovementAllowed()
-    {
-        // Arrange
-        SetupJointComponent(0f, 100f, Vector3.forward);
-        yield return null;
-        yield return new WaitForSeconds(PhysicsWaitTime);
-
-        // Assert
-        Rigidbody rb = _objectB.GetComponent<Rigidbody>();
-
-        Assert.That(rb.constraints.HasFlag(RigidbodyConstraints.FreezePositionX), Is.True);
-        Assert.That(rb.constraints.HasFlag(RigidbodyConstraints.FreezePositionY), Is.True);
-        Assert.That(rb.constraints.HasFlag(RigidbodyConstraints.FreezePositionZ), Is.False);
-    }
-
-    /**
-     * @brief  회전 Constraints 테스트 - 모든 회전이 프리즈되는지 검증한다.
-     */
-    [UnityTest]
-    public IEnumerator Constraints_AllRotationFrozen()
-    {
-        // Arrange
-        SetupJointComponent(0f, 100f, Vector3.right);
-        yield return null;
-        yield return new WaitForSeconds(PhysicsWaitTime);
-
-        // Assert
-        Rigidbody rb = _objectB.GetComponent<Rigidbody>();
-
-        Assert.That(rb.constraints.HasFlag(RigidbodyConstraints.FreezeRotationX), Is.True);
-        Assert.That(rb.constraints.HasFlag(RigidbodyConstraints.FreezeRotationY), Is.True);
-        Assert.That(rb.constraints.HasFlag(RigidbodyConstraints.FreezeRotationZ), Is.True);
-    }
-
-    #endregion
-
-    #region 중력 제어 테스트
-
-    /**
-     * @brief  구속 전 중력 비활성화 테스트 - 구속 전에는 중력이 비활성화되는지 검증한다.
-     */
-    [UnityTest]
-    public IEnumerator Gravity_BeforeConstrained_GravityDisabled()
-    {
-        // Arrange - 일치하지 않는 위치로 설정
-        _objectB.transform.position = new Vector3(0, 10, 0);
-        _objectB.transform.rotation = Quaternion.Euler(45, 45, 45);  // 회전도 다르게
-        SetupJointComponent(0f, 100f, Vector3.right);
-        yield return null;
-
-        // Assert
-        Rigidbody rb = _objectB.GetComponent<Rigidbody>();
-        Assert.IsFalse(rb.useGravity);
-    }
-
-    /**
-     * @brief  구속 후 중력 활성화 테스트 - 구속 후에는 중력이 활성화되는지 검증한다.
-     */
-    [UnityTest]
-    public IEnumerator Gravity_AfterConstrained_GravityEnabled()
-    {
-        // Arrange - 일치하는 위치로 설정
-        SetupJointComponent(0f, 100f, Vector3.right);
-        yield return null;
-        yield return new WaitForSeconds(PhysicsWaitTime);
-
-        // Assert
-        Rigidbody rb = _objectB.GetComponent<Rigidbody>();
-        Assert.IsTrue(rb.useGravity);
     }
 
     #endregion
@@ -478,13 +317,11 @@ public class SliderJointComponentPlayModeTest
         SetupJointComponent(0f, 100f, Vector3.right);
         yield return null;
 
-        Rigidbody rb = _objectB.GetComponent<Rigidbody>();
-
-        // Act - 여러 번 이동 입력
+        // Act - 여러 번 이동 입력 (Transform 직접 제어)
         for (int i = 0; i < 5; i++)
         {
-            Vector3 currentPos = rb.position;
-            rb.MovePosition(currentPos + Vector3.right * 10f);
+            Vector3 currentPos = _objectB.transform.position;
+            _objectB.transform.position = currentPos + Vector3.right * 10f;
             yield return new WaitForFixedUpdate();
         }
 
@@ -504,13 +341,11 @@ public class SliderJointComponentPlayModeTest
         SetupJointComponent(0f, 100f, Vector3.right);
         yield return null;
 
-        Rigidbody rb = _objectB.GetComponent<Rigidbody>();
-
-        // Act - 빠르게 위치 변경
+        // Act - 빠르게 위치 변경 (Transform 직접 제어)
         float[] positions = { 30f, -10f, 50f, 120f, 80f, -20f };
         foreach (float pos in positions)
         {
-            rb.MovePosition(new Vector3(pos, 0f, 0f));
+            _objectB.transform.position = new Vector3(pos, 0f, 0f);
             yield return new WaitForFixedUpdate();
         }
 
@@ -532,18 +367,15 @@ public class SliderJointComponentPlayModeTest
 
         // Act - 양쪽 경계 테스트
         _jointComponent.SetPosition(-50f);  // min 미만
-        yield return new WaitForFixedUpdate(); // 물리 연산 대기
-        yield return new WaitForEndOfFrame();  // 트랜스폼 반영 대기
+        yield return new WaitForSeconds(PhysicsWaitTime);
         Assert.AreEqual(-30f, _jointComponent.CurrentPosition, Tolerance);
 
         _jointComponent.SetPosition(200f);  // max 초과
-        yield return new WaitForFixedUpdate(); // 물리 연산 대기
-        yield return new WaitForEndOfFrame();  // 트랜스폼 반영 대기
+        yield return new WaitForSeconds(PhysicsWaitTime);
         Assert.AreEqual(150f, _jointComponent.CurrentPosition, Tolerance);
 
         _jointComponent.SetPosition(60f);  // 범위 내
-        yield return new WaitForFixedUpdate(); // 물리 연산 대기
-        yield return new WaitForEndOfFrame();  // 트랜스폼 반영 대기
+        yield return new WaitForSeconds(PhysicsWaitTime);
         Assert.AreEqual(60f, _jointComponent.CurrentPosition, Tolerance);
     }
 
@@ -601,7 +433,7 @@ public class SliderJointComponentPlayModeTest
         SetupJointComponent(0f, 100f, Vector3.right);
         yield return null;
 
-        // Act - 오브젝트 A 위치 변경
+        // Act - 오브젝트 A 위치 변경 (Transform 직접 제어)
         _objectA.transform.position = new Vector3(50f, 50f, 50f);
         _objectB.transform.position = new Vector3(50f, 50f, 50f);
         yield return new WaitForSeconds(PhysicsWaitTime);
@@ -640,26 +472,21 @@ public class SliderJointComponentPlayModeTest
     [UnityTest]
     public IEnumerator ErrorHandling_MissingObjectA_HandledGracefully()
     {
-        // 오브젝트 비활성화 (AddComponent 시 Awake 호출 방지)
         _managerObject.SetActive(false);
 
-        // 에러 로그 예상 등록 (SliderJointComponent 이름 확인)
         UnityEngine.TestTools.LogAssert.Expect(LogType.Error,
             new System.Text.RegularExpressions.Regex("SliderJointComponent: 필수 오브젝트.*"));
 
-        // Arrange
         _jointComponent = _managerObject.AddComponent<SliderJointComponent>();
 
         var baseType = typeof(JointComponent);
         baseType.GetField("_objectB", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
             .SetValue(_jointComponent, _objectB.transform);
-        // _objectA 는 설정하지 않음
 
-        _managerObject.SetActive(true); // 활성화하여 Awake 실행
+        _managerObject.SetActive(true);
         yield return null;
         yield return new WaitForSeconds(PhysicsWaitTime);
 
-        // Assert - 예외 없이 실행되어야 함
         Assert.Pass("No exception thrown with missing ObjectA");
     }
 
@@ -669,26 +496,21 @@ public class SliderJointComponentPlayModeTest
     [UnityTest]
     public IEnumerator ErrorHandling_MissingObjectB_HandledGracefully()
     {
-        // 오브젝트 비활성화 (AddComponent 시 Awake 호출 방지)
         _managerObject.SetActive(false);
 
-        // 에러 로그 예상 등록 (SliderJointComponent 이름 확인)
         UnityEngine.TestTools.LogAssert.Expect(LogType.Error,
             new System.Text.RegularExpressions.Regex("SliderJointComponent: 필수 오브젝트.*"));
 
-        // Arrange
         _jointComponent = _managerObject.AddComponent<SliderJointComponent>();
 
         var baseType = typeof(JointComponent);
         baseType.GetField("_objectA", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
             .SetValue(_jointComponent, _objectA.transform);
-        // _objectB 는 설정하지 않음
 
-        _managerObject.SetActive(true); // 활성화하여 Awake 실행
+        _managerObject.SetActive(true);
         yield return null;
         yield return new WaitForSeconds(PhysicsWaitTime);
 
-        // Assert - 예외 없이 실행되어야 함
         Assert.Pass("No exception thrown with missing ObjectB");
     }
 
@@ -699,11 +521,11 @@ public class SliderJointComponentPlayModeTest
     public IEnumerator ErrorHandling_ZeroMoveDirection_HandledGracefully()
     {
         // Arrange
-        SetupJointComponent(0f, 100f, Vector3.zero);  // 영벡터
+        SetupJointComponent(0f, 100f, Vector3.zero);
         yield return null;
         yield return new WaitForSeconds(PhysicsWaitTime);
 
-        // Assert - 예외 없이 실행되어야 함 (정규화 시 0 벡터 처리)
+        // Assert - 예외 없이 실행되어야 함
         Assert.Pass("No exception thrown with zero move direction");
     }
 

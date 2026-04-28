@@ -640,6 +640,11 @@ public class ConstraintAssemblyWindow : EditorWindow
             SetSerializedField(comp, "_objectA", _objectA.transform);
             SetSerializedField(comp, "_objectB", _objectB.transform);
             SetSerializedField(comp, "_rotationAxis", _lineA.Direction);
+            // [2026.04.21 추가] 선택된 Line 점 좌표 저장
+            SetSerializedField(comp, "_lineAPointA", _lineA.PointA);
+            SetSerializedField(comp, "_lineAPointB", _lineA.PointB);
+            SetSerializedField(comp, "_lineBPointA", _lineB.PointA);
+            SetSerializedField(comp, "_lineBPointB", _lineB.PointB);
         }
         else
         {
@@ -647,6 +652,17 @@ public class ConstraintAssemblyWindow : EditorWindow
             SetSerializedField(comp, "_objectA", _objectA.transform);
             SetSerializedField(comp, "_objectB", _objectB.transform);
             SetSerializedField(comp, "_moveDirection", _lineA.Direction);
+            // [2026.04.21 추가] 선택된 Line, Plane 점 좌표 저장
+            SetSerializedField(comp, "_lineAPointA", _lineA.PointA);
+            SetSerializedField(comp, "_lineAPointB", _lineA.PointB);
+            SetSerializedField(comp, "_lineBPointA", _lineB.PointA);
+            SetSerializedField(comp, "_lineBPointB", _lineB.PointB);
+            SetSerializedField(comp, "_planeAPointA", _planeA.PointA);
+            SetSerializedField(comp, "_planeAPointB", _planeA.PointB);
+            SetSerializedField(comp, "_planeAPointC", _planeA.PointC);
+            SetSerializedField(comp, "_planeBPointA", _planeB.PointA);
+            SetSerializedField(comp, "_planeBPointB", _planeB.PointB);
+            SetSerializedField(comp, "_planeBPointC", _planeB.PointC);
         }
 
         // ⑤ 생성된 Manager 를 씬에서 선택
@@ -703,13 +719,15 @@ public class ConstraintAssemblyWindow : EditorWindow
     {
         if (_lineA == null || _lineB == null) return;
 
-        // LineB 의 시작점을 LineA 무한직선 위에 투영
         Vector3 projectedPoint = _lineA.Project(_lineB.PointA);
-
-        // 투영점과 LineB 시작점의 차이 = B 를 이동시킬 오프셋
         Vector3 offset = projectedPoint - _lineB.PointA;
-
         tB.position += offset;
+
+        // [2026.04.21 추가] 스냅 후 lineB 좌표 업데이트 및 방향 일치
+        if (Vector3.Dot(_lineA.Direction, _lineB.Direction) < 0)
+            _lineB = new Line(_lineB.PointB + offset, _lineB.PointA + offset);
+        else
+            _lineB = new Line(_lineB.PointA + offset, _lineB.PointB + offset);
 
         Debug.Log($"[구속 조건 조립] RevoluteJoint 스냅: {tB.name} 을 회전축 위로 이동 (offset: {FormatVec(offset)})");
     }

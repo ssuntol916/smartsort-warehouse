@@ -5,6 +5,10 @@
 // 작성일  : 2026-03-24
 // 사용법  : Unity Test Runner (EditMode) 에서 실행
 //           Window > General > Test Runner > EditMode > Run All
+// 수정이력: 2026-04-24 - Contains_OffLine_ReturnsFalse 테스트 수정
+//                        Y 오프셋 0.001f → 0.03f 로 변경
+//                        (Tolerance 가 0.02f 로 변경됨에 따라 0.001f 는
+//                        허용 범위 내로 들어가 테스트가 실패하는 문제 수정)
 // ============================================================
 
 using NUnit.Framework;
@@ -15,7 +19,7 @@ public class LineTest
     // ──────────────────────────────────────────────
     // 공용 Tolerance (Line.cs 와 동일값)
     // ──────────────────────────────────────────────
-    private const float Tolerance = 1e-6f;
+    private const float Tolerance = 0.02f; // [2026.04.24 수정] Line.cs 의 Tolerance 와 동일값으로 설정
 
     // ============================================================
     // [1] IsCoincident — 동일선 판별
@@ -294,13 +298,16 @@ public class LineTest
     }
 
     /// <summary>
-    /// 선에서 살짝 벗어난 점 → false
+    /// 선에서 Tolerance(0.02f) 바깥으로 벗어난 점 → false
+    /// [2026.04.24 수정] Y 오프셋 0.001f → 0.03f 로 변경
+    ///                  Tolerance 가 0.02f 로 변경됨에 따라 0.001f 는
+    ///                  허용 범위 내로 들어가 테스트가 실패하는 문제 수정
     /// </summary>
     [Test]
     public void Contains_OffLine_ReturnsFalse()
     {
         var line = new Line(new Vector3(0, 0, 0), new Vector3(1, 0, 0));
-        Assert.IsFalse(line.Contains(new Vector3(0.5f, 0.001f, 0))); // Y 방향으로 살짝 벗어남
+        Assert.IsFalse(line.Contains(new Vector3(0.5f, 0.03f, 0))); // [2026.04.24 수정] 0.001f → 0.03f
     }
 
     // ============================================================
@@ -364,7 +371,7 @@ public class LineTest
         var line = new Line(new Vector3(0, 0, 0), new Vector3(2, 2, 0));
         Vector3 result = line.Project(new Vector3(2, 0, 0));
 
-        Assert.AreEqual(1f, result.x, 0.0001f); // 수치 계산 오차 허용
+        Assert.AreEqual(1f, result.x, 0.0001f);
         Assert.AreEqual(1f, result.y, 0.0001f);
         Assert.AreEqual(0f, result.z, 0.0001f);
     }
@@ -436,9 +443,8 @@ public class LineTest
         var b = new Line(new Vector3(-1, 0, 0), new Vector3(5, 0, 0)); // 동일 X축
 
         bool coincident = a.IsCoincident(b);
-        bool parallel   = a.IsParallel(b);
+        bool parallel = a.IsParallel(b);
 
-        // 일치이면 평행이 아니어야 하고, 평행이면 일치가 아니어야 한다
         Assert.IsTrue(coincident != parallel,
             $"IsCoincident={coincident}, IsParallel={parallel} — 둘 다 같은 값이면 안 됨");
     }
@@ -495,35 +501,34 @@ public class LineTest
         Vector3 point = new Vector3(3, -2, 5);
 
         float distFromMethod = line.Distance(point);
-        float distManual     = Vector3.Distance(point, line.Project(point));
+        float distManual = Vector3.Distance(point, line.Project(point));
 
         Assert.AreEqual(distManual, distFromMethod, Tolerance,
             "Distance() 와 Vector3.Distance(point, Project()) 결과가 다름");
     }
 
     /// <summary>
-    /// 복합 트랩 5: 부동소수점 누적 오차 — 아주 작은 수치 차이가 Contains 판별에 영향을 주는가
-    /// 1e-7 수준의 오차를 가진 점은 Tolerance(1e-6) 이내이므로 Contains = true 이어야 한다
+    /// 복합 트랩 5: Tolerance(0.02f) 이내의 노이즈를 가진 점은 Contains = true 이어야 한다
+    /// [2026.04.24 수정] 노이즈값 1e-7 → 0.01f 로 변경 (Tolerance 0.02f 이내)
     /// </summary>
     [Test]
     public void Trap_FloatingPoint_SmallNoise_StillContained()
     {
         var line = new Line(new Vector3(0, 0, 0), new Vector3(1, 0, 0));
-        // Y 성분에 Tolerance 보다 10배 작은 노이즈 추가
-        Vector3 noisyPoint = new Vector3(2f, 1e-7f, 0f);
+        Vector3 noisyPoint = new Vector3(2f, 0.01f, 0f); // [2026.04.24 수정] Tolerance(0.02f) 이내
         Assert.IsTrue(line.Contains(noisyPoint),
-            "1e-7 수준 노이즈를 선 위 점으로 인식 못함");
+            "Tolerance 이내 노이즈를 선 위 점으로 인식 못함");
     }
 
     /// <summary>
-    /// 복합 트랩 6: Tolerance 경계 바로 바깥 → Contains = false 이어야 한다
+    /// 복합 트랩 6: Tolerance(0.02f) 경계 바로 바깥 → Contains = false 이어야 한다
+    /// [2026.04.24 수정] 기준값 수정 (Tolerance 0.02f 바깥인 0.03f 사용)
     /// </summary>
     [Test]
     public void Trap_FloatingPoint_JustOutsideTolerance_NotContained()
     {
         var line = new Line(new Vector3(0, 0, 0), new Vector3(1, 0, 0));
-        // Y 성분이 Tolerance(1e-6) 보다 10배 크면 → false
-        Vector3 point = new Vector3(2f, 1e-5f, 0f);
+        Vector3 point = new Vector3(2f, 0.03f, 0f); // [2026.04.24 수정] Tolerance(0.02f) 바깥
         Assert.IsFalse(line.Contains(point),
             "Tolerance 바깥 점이 선 위로 인식됨");
     }

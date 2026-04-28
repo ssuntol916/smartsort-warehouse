@@ -1,10 +1,13 @@
 // ============================================================
 // 파일명  : JointComponent.cs
 // 역할    : SliderJointComponent 와 RevoluteJointComponent 의 공통 기반 추상 클래스
-//           Rigidbody 초기화, 구속 상태 로그, Update 공통 흐름을 담당한다.
+//           구속 상태 로그, Update 공통 흐름을 담당한다.
 // 작성자  : 이현화
 // 작성일  : 2026-04-01
-// 수정이력: 
+// 수정이력: 2026-04-22 - 구속 후 useGravity 활성화 코드 제거 (중력 비활성화 유지)
+//                      - Rigidbody 제거, Transform 직접 제어 방식으로 리팩토링
+//                        (디지털 트윈 특성상 물리 엔진 불필요)
+//                      - ObjectB 프로퍼티 추가 (외부에서 오브젝트 B 접근용)
 // ============================================================
 
 using UnityEngine;
@@ -14,18 +17,15 @@ public abstract class JointComponent : MonoBehaviour
     [SerializeField] protected Transform _objectA;   // 오브젝트 A (기준)
     [SerializeField] protected Transform _objectB;   // 오브젝트 B (이동 또는 회전 대상)
 
-    protected Rigidbody _rigidbodyA;                   // 오브젝트 A 리지드바디
-    protected Rigidbody _rigidbodyB;                   // 오브젝트 B 리지드바디
-    protected RigidbodyConstraints _freezeConstraint;  // 프리즈 조건 (캐시)
+    public Transform ObjectB => _objectB;            // [2026.04.22 추가] 오브젝트 B (이동 또는 회전 대상)
 
-    protected bool _wasConstrained;                    // 이전 프레임 구속 상태
+    protected bool _wasConstrained;                  // 이전 프레임 구속 상태 (구속 상태 변경 로그용)
 
-    protected const float ApplyTolerance = 0.001f;     // 물리 적용 판별 허용 오차 (Line/Plane 의 Tolerance 1e-6f 와 구분)
+    protected const float ApplyTolerance = 0.001f;   // 물리 적용 판별 허용 오차 (Line/Plane 의 Tolerance 1e-6f 와 구분)
 
     /**
      * @brief  공통 Awake 처리.
-     *         Rigidbody 초기화 → 중력 비활성화 → 프리즈 조건 계산 → 자식 전용 초기화(OnAwake) 순서로 실행한다.
-     *         구속 확인 전 오브젝트 B 가 중력으로 떨어지는 것을 방지하기 위해 초기에 중력을 비활성화한다.
+     *         유효성 검사 → 자식 전용 초기화 순서로 실행한다.
      */
     protected virtual void Awake()
     {
@@ -35,13 +35,7 @@ public abstract class JointComponent : MonoBehaviour
             enabled = false;  // Update 호출 중단 (NullReferenceException 방지)
             return;
         }
-        _rigidbodyA = InitializeRigidbody(_objectA, true);
-        _rigidbodyB = InitializeRigidbody(_objectB, false);
 
-        // 구속 확인 전 중력으로 떨어지는 것을 방지하기 위해 초기에 중력 비활성화
-        _rigidbodyB.useGravity = false;
-
-        _freezeConstraint = GetFreezeConstraintByDirection();
         InitializeChild();
     }
 
@@ -50,41 +44,33 @@ public abstract class JointComponent : MonoBehaviour
     /**
      * @brief  공통 Update 처리. (임시 - 추후 FixedUpdate 로 변경 예정)
      *         IsValid → ApplyConstraint → 구속 상태 변경 로그 → 구속/해제 분기 순서로 실행한다.
-     *         구속됨 상태일 때만 중력을 활성화하고, 구속 안 됨 상태일 때는 중력을 비활성화한다.
      */
     protected virtual void Update()
     {
         if (!IsJointValid()) return;
 
-        bool isConstrained = ApplyJointConstraint();
+        bool isConstrained = ApplyJointConstraint();  // 구속 조건 적용 결과
 
         // 구속 상태가 변경됐을 때만 로그 출력
         if (isConstrained != _wasConstrained)
         {
             Debug.Log($"{GetType().Name} 구속 상태 변경: {(isConstrained ? "구속됨" : "해제됨")}");
-            _wasConstrained = isConstrained;
+            _wasConstrained = isConstrained;  // 이전 프레임 구속 상태 갱신
         }
 
         if (isConstrained)
         {
-            _rigidbodyB.useGravity = true;   // 구속됨 → 중력 활성화
-            _rigidbodyB.constraints = _freezeConstraint;
-            OnConstrained();
-        }
-        else
-        {
-            _rigidbodyB.useGravity = false;  // 구속 안 됨 → 중력 비활성화
-            _rigidbodyB.constraints = RigidbodyConstraints.None;
+            OnConstrained();  // 구속 상태일 때 자식 클래스 전용 처리
         }
     }
 
     /**
-    * @brief  Inspector 에서 값 변경 시 공통 유효성 검사 후 자식 전용 재초기화를 호출한다.
-    *         ※ Play 모드에서는 실행되지 않는다.
-    */
+     * @brief  Inspector 에서 값 변경 시 공통 유효성 검사 후 자식 전용 재초기화를 호출한다.
+     *         ※ Play 모드에서는 실행되지 않는다.
+     */
     protected void OnValidate()
     {
-        if (Application.isPlaying) return;
+        if (Application.isPlaying) return;  // Play 모드에서는 실행하지 않는다
         if (_objectA == null || _objectB == null) return;
         OnValidateJoint();
     }
@@ -96,9 +82,9 @@ public abstract class JointComponent : MonoBehaviour
     protected abstract void InitializeChild();
 
     /**
-    * @brief  Inspector 에서 값 변경 시 자식 클래스 전용 재초기화.
-    *         Line·Plane·Joint 인스턴스를 자식에서 재생성한다.
-    */
+     * @brief  Inspector 에서 값 변경 시 자식 클래스 전용 재초기화.
+     *         Line·Plane·Joint 인스턴스를 자식에서 재생성한다.
+     */
     protected abstract void OnValidateJoint();
 
     /**
@@ -117,42 +103,7 @@ public abstract class JointComponent : MonoBehaviour
 
     /**
      * @brief  구속 상태일 때 자식 클래스 전용 처리.
-     *         MovePosition 또는 MoveRotation 을 여기서 호출한다.
+     *         Transform 직접 제어로 위치 또는 회전을 적용한다.
      */
     protected abstract void OnConstrained();
-
-    /**
-     * @brief  이동 또는 회전 방향 축을 감지하여 해당 축만 열어두고
-     *         나머지를 프리즈한 RigidbodyConstraints 를 반환한다.
-     *         자식 클래스에서 FreezePosition / FreezeRotation 중 하나를 선택하여 구현한다.
-     * @return RigidbodyConstraints  축 방향에 맞는 프리즈 조건
-     */
-    protected abstract RigidbodyConstraints GetFreezeConstraintByDirection();
-
-    /**
-     * @brief  오브젝트의 Rigidbody 를 가져온다.
-     *         Rigidbody 가 없으면 자동으로 생성한다.
-     *         shouldBeKinematic 이 true 이고 Rigidbody 가 Kinematic 이 아니면
-     *         자동으로 Kinematic 으로 설정하고 로그를 출력한다.
-     * @param  target              대상 오브젝트의 Transform
-     * @param  shouldBeKinematic   true 이면 Rigidbody 를 Kinematic 으로 설정한다.
-     *                             (오브젝트 A 고정용)
-     * @return Rigidbody           가져오거나 생성한 Rigidbody
-     */
-    protected Rigidbody InitializeRigidbody(Transform target, bool shouldBeKinematic)
-    {
-        Rigidbody rb = target.GetComponent<Rigidbody>();
-        if (rb == null)
-        {
-            rb = target.gameObject.AddComponent<Rigidbody>();
-        }
-
-        if (shouldBeKinematic && !rb.isKinematic)
-        {
-            rb.isKinematic = true;
-            Debug.Log($"{GetType().Name}: Object A 가 자동으로 고정되었습니다.\n고정 대상을 변경하려면 Inspector 에서 Is Kinematic 을 수동으로 설정해주세요.");
-        }
-
-        return rb;
-    }
 }
