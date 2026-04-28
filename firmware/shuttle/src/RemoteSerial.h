@@ -78,4 +78,8 @@ private:
 };
 
 // 전역 인스턴스 — main.cpp에서 정의
+<<<<<<< HEAD
 extern RemoteSerial LOG;
+=======
+extern RemoteSerial LOG;
+>>>>>>> 05db93d678b19e210f58f4ff7651b8f813a0666d
