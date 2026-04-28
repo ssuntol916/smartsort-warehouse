@@ -1,6 +1,6 @@
 // ============================================================
-// 파일명  : XWheelController.cs
-// 역할    : xwheel1~4 를 자전시키고 셔틀을 Z축 방향으로 이동시킨다.
+// 파일명  : YWheelController.cs
+// 역할    : ywheel1~4 를 자전시키고 셔틀을 X축 방향으로 이동시킨다.
 //           3초에 1바퀴 기준으로 _duration 초 동안 동작한다.
 //           회전축은 RevoluteJointComponent 에서 가져오고
 //           실제 회전은 Transform 을 직접 제어한다.
@@ -11,18 +11,18 @@
 
 using UnityEngine;
 
-public class XWheelController : MonoBehaviour
+public class YWheelController : MonoBehaviour
 {
     // ============================================================
     // Inspector 필드
     // ============================================================
 
     [Header("필수 오브젝트")]
-    [SerializeField] private Transform _shuttle;       // 셔틀 최상위 Transform (Z축 이동 대상)
-    [SerializeField] private RevoluteJointComponent _xwheel1Joint; // xwheel1 조인트
-    [SerializeField] private RevoluteJointComponent _xwheel2Joint; // xwheel2 조인트
-    [SerializeField] private RevoluteJointComponent _xwheel3Joint; // xwheel3 조인트
-    [SerializeField] private RevoluteJointComponent _xwheel4Joint; // xwheel4 조인트
+    [SerializeField] private Transform _shuttle;       // 셔틀 최상위 Transform (X축 이동 대상)
+    [SerializeField] private RevoluteJointComponent _ywheel1Joint; // ywheel1 조인트
+    [SerializeField] private RevoluteJointComponent _ywheel2Joint; // ywheel2 조인트
+    [SerializeField] private RevoluteJointComponent _ywheel3Joint; // ywheel3 조인트
+    [SerializeField] private RevoluteJointComponent _ywheel4Joint; // ywheel4 조인트
 
     [Header("파라미터")]
     [SerializeField] private float _duration = 0f;   // 이동 지속 시간 (초) — 3초당 1바퀴 기준
@@ -40,7 +40,7 @@ public class XWheelController : MonoBehaviour
     // 런타임 상태
     // ============================================================
 
-    private float _wheelRadius; // 바퀴 반지름 (xwheel1 메쉬에서 자동 계산)
+    private float _wheelRadius; // 바퀴 반지름 (ywheel1 메쉬에서 자동 계산)
     private float _elapsedTime; // 경과 시간 (초)
 
     // LineBCenter 기준 각 바퀴의 위치 오프셋 (자전 피벗 보정용)
@@ -59,11 +59,11 @@ public class XWheelController : MonoBehaviour
         InitializeWheelRadius();
         InitializeCenterOffsets();
 
-        Debug.Log($"[XWheel] 초기화 완료 | wheelRadius={_wheelRadius}");
+        Debug.Log($"[YWheel] 초기화 완료 | wheelRadius={_wheelRadius}");
     }
 
     /**
-     * @brief  매 프레임 xwheel1~4 를 자전시키고 셔틀을 Z축으로 이동시킨다.
+     * @brief  매 프레임 ywheel1~4 를 자전시키고 셔틀을 X축으로 이동시킨다.
      *         IsSignal=true 이고 _duration > 0 인 경우에만 동작한다.
      *         _duration 경과 시 자동으로 신호를 해제한다.
      */
@@ -84,15 +84,15 @@ public class XWheelController : MonoBehaviour
         float direction = _isForward ? 1f : -1f;
         float deltaAngle = DegreesPerSecond * Time.deltaTime * direction;
 
-        Quaternion rotation = Quaternion.AngleAxis(-deltaAngle, _xwheel1Joint.ObjectBRotationAxis);
+        Quaternion rotation = Quaternion.AngleAxis(deltaAngle, _ywheel1Joint.ObjectBRotationAxis);
 
-        RotateWheel(_xwheel1Joint, rotation, ref _centerOffset1);
-        RotateWheel(_xwheel2Joint, rotation, ref _centerOffset2);
-        RotateWheel(_xwheel3Joint, rotation, ref _centerOffset3);
-        RotateWheel(_xwheel4Joint, rotation, ref _centerOffset4);
+        RotateWheel(_ywheel1Joint, rotation, ref _centerOffset1);
+        RotateWheel(_ywheel2Joint, rotation, ref _centerOffset2);
+        RotateWheel(_ywheel3Joint, rotation, ref _centerOffset3);
+        RotateWheel(_ywheel4Joint, rotation, ref _centerOffset4);
 
         float moveDistance = _wheelRadius * deltaAngle * Mathf.Deg2Rad;
-        _shuttle.position += Vector3.forward * moveDistance;
+        _shuttle.position += Vector3.right * moveDistance;
     }
 
     // ============================================================
@@ -100,14 +100,14 @@ public class XWheelController : MonoBehaviour
     // ============================================================
 
     /**
-     * @brief  xwheel1 메쉬 바운딩 박스에서 바퀴 반지름을 자동 계산한다.
+     * @brief  ywheel1 메쉬 바운딩 박스에서 바퀴 반지름을 자동 계산한다.
      *         extents.y = Y축 절반 크기 = 반지름 (로컬 좌표)
      *         lossyScale.y 를 곱해 월드 기준 실제 반지름으로 변환한다.
      */
     private void InitializeWheelRadius()
     {
-        Bounds bounds = _xwheel1Joint.ObjectB.GetComponent<MeshFilter>().mesh.bounds;
-        _wheelRadius = bounds.extents.y * _xwheel1Joint.ObjectB.lossyScale.y;
+        Bounds bounds = _ywheel1Joint.ObjectB.GetComponent<MeshFilter>().mesh.bounds;
+        _wheelRadius = bounds.extents.y * _ywheel1Joint.ObjectB.lossyScale.y;
     }
 
     /**
@@ -115,10 +115,10 @@ public class XWheelController : MonoBehaviour
      */
     private void InitializeCenterOffsets()
     {
-        _centerOffset1 = _xwheel1Joint.ObjectB.position - _xwheel1Joint.LineBCenter;
-        _centerOffset2 = _xwheel2Joint.ObjectB.position - _xwheel2Joint.LineBCenter;
-        _centerOffset3 = _xwheel3Joint.ObjectB.position - _xwheel3Joint.LineBCenter;
-        _centerOffset4 = _xwheel4Joint.ObjectB.position - _xwheel4Joint.LineBCenter;
+        _centerOffset1 = _ywheel1Joint.ObjectB.position - _ywheel1Joint.LineBCenter;
+        _centerOffset2 = _ywheel2Joint.ObjectB.position - _ywheel2Joint.LineBCenter;
+        _centerOffset3 = _ywheel3Joint.ObjectB.position - _ywheel3Joint.LineBCenter;
+        _centerOffset4 = _ywheel4Joint.ObjectB.position - _ywheel4Joint.LineBCenter;
     }
 
     // ============================================================
@@ -152,16 +152,16 @@ public class XWheelController : MonoBehaviour
     {
         bool isValid = true;
 
-        if (_xwheel1Joint == null || _xwheel2Joint == null ||
-            _xwheel3Joint == null || _xwheel4Joint == null)
+        if (_ywheel1Joint == null || _ywheel2Joint == null ||
+            _ywheel3Joint == null || _ywheel4Joint == null)
         {
-            Debug.LogError("[XWheel] xwheel 조인트가 할당되지 않았습니다.");
+            Debug.LogError("[YWheel] ywheel 조인트가 할당되지 않았습니다.");
             isValid = false;
         }
 
         if (_shuttle == null)
         {
-            Debug.LogError("[XWheel] _shuttle 이 할당되지 않았습니다.");
+            Debug.LogError("[YWheel] _shuttle 이 할당되지 않았습니다.");
             isValid = false;
         }
 

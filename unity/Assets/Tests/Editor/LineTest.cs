@@ -15,7 +15,7 @@ public class LineTest
     // ──────────────────────────────────────────────
     // 공용 Tolerance (Line.cs 와 동일값)
     // ──────────────────────────────────────────────
-    private const float Tolerance = 1e-6f;
+    private const float Tolerance = 0.02f; // [2026.04.24 수정] Line.cs 의 Tolerance 와 동일값으로 설정
 
     // ============================================================
     // [1] IsCoincident — 동일선 판별
@@ -510,7 +510,7 @@ public class LineTest
     {
         var line = new Line(new Vector3(0, 0, 0), new Vector3(1, 0, 0));
         // Y 성분에 Tolerance 보다 10배 작은 노이즈 추가
-        Vector3 noisyPoint = new Vector3(2f, 1e-7f, 0f);
+        Vector3 noisyPoint = new Vector3(2f, 0.01f, 0f);  // [2026.04.24 수정] Tolerance(0.02f) 이내
         Assert.IsTrue(line.Contains(noisyPoint),
             "1e-7 수준 노이즈를 선 위 점으로 인식 못함");
     }
@@ -523,7 +523,7 @@ public class LineTest
     {
         var line = new Line(new Vector3(0, 0, 0), new Vector3(1, 0, 0));
         // Y 성분이 Tolerance(1e-6) 보다 10배 크면 → false
-        Vector3 point = new Vector3(2f, 1e-5f, 0f);
+        Vector3 point = new Vector3(2f, 0.03f, 0f);  // [2026.04.24 수정] Tolerance(0.02f) 바깥
         Assert.IsFalse(line.Contains(point),
             "Tolerance 바깥 점이 선 위로 인식됨");
     }
