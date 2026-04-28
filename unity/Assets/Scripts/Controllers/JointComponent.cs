@@ -17,7 +17,8 @@ public abstract class JointComponent : MonoBehaviour
     [SerializeField] protected Transform _objectA;   // 오브젝트 A (기준)
     [SerializeField] protected Transform _objectB;   // 오브젝트 B (이동 또는 회전 대상)
 
-    public Transform ObjectB => _objectB;  // [2026.04.22 추가] 오브젝트 B (이동 또는 회전 대상)
+    public Transform ObjectB => _objectB;            // [2026.04.22 추가] 오브젝트 B (이동 또는 회전 대상)
+
 
     protected bool _wasConstrained;                  // 이전 프레임 구속 상태 (구속 상태 변경 로그용)
 

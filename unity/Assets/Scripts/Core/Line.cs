@@ -3,15 +3,18 @@
 // 역할    : 기구학 계산을 위한 선(Line) 기반 클래스
 // 작성자  : 이현화
 // 작성일  : 2026-03-24
-// 수정이력: 
+// 수정이력: 2026-04-24 - Tolerance 를 1e-6f → 0.02f 로 조정
+//                        (ConstraintAssemblyWindow Edge 선택 시 발생하는 미세 좌표 오차 허용)
 // ============================================================
 
 using UnityEngine;
 
 public class Line
 {
-    // 허용 오차 (부동소수점 비교 시 사용)
-    private const float Tolerance = 1e-6f;
+    // [2026.04.24 수정] Tolerance 를 1e-6f → 0.01f → 0.02f 로 조정
+    //                  ConstraintAssemblyWindow 에서 Edge 선택 시 발생하는
+    //                  미세 좌표 오차(약 0.01 수준)를 허용하기 위함
+    private const float Tolerance = 0.02f;
 
     private Vector3 _pointA;    // 선의 시작점
     private Vector3 _pointB;    // 선의 끝점
