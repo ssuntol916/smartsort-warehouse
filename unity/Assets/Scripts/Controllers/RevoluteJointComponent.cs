@@ -136,6 +136,7 @@ public class RevoluteJointComponent : JointComponent
 
         if (currentAngle < _minAngle || currentAngle > _maxAngle)
         {
+            // [2026.04.22 수정] MoveRotation → Transform 직접 제어
             Quaternion clampedRot = _joint.GetClampedRotation(
                 _initialDirection, currentDirection, _objectBRotationAxis, _initialRotation);
             _objectB.rotation = clampedRot;

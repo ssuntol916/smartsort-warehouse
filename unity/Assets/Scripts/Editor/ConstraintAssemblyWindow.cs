@@ -5,6 +5,7 @@
 // 작성일  : 2026-04-14
 // ============================================================
 
+using System;
 using UnityEditor;
 using UnityEngine;
 
@@ -272,7 +273,7 @@ public class ConstraintAssemblyWindow : EditorWindow
 
         switch (_currentStep)
         {
-            case WorkflowStep.SelectObjectA:  DrawObjectSelector(ref _objectA, "Object A (기준)"); break;
+            case WorkflowStep.SelectObjectA:  DrawObjectSelector(ref _objectA, "Object A (기준)");  break;
             case WorkflowStep.SelectGeometryA: DrawGeometrySelector(isObjectA: true);               break;
             case WorkflowStep.SelectObjectB:   DrawObjectSelector(ref _objectB, "Object B (대상)"); break;
             case WorkflowStep.SelectGeometryB: DrawGeometrySelector(isObjectA: false);              break;
@@ -366,8 +367,8 @@ public class ConstraintAssemblyWindow : EditorWindow
             // Edge 선택 버튼
             Line currentLine = isObjectA ? _lineA : _lineB;
             string edgeBtnLabel = currentLine != null
-                ? "Edge 재선택 (Scene View)"
-                : "Edge 선택 시작 (Scene View)";
+                ? "Edge 재선택"
+                : "Edge 선택 시작";
 
             using (new EditorGUI.DisabledScope(isSelecting))
             {
@@ -382,8 +383,8 @@ public class ConstraintAssemblyWindow : EditorWindow
             {
                 Plane currentPlane = isObjectA ? _planeA : _planeB;
                 string faceBtnLabel = currentPlane != null
-                    ? "Face 재선택 (Scene View)"
-                    : "Face 선택 시작 (Scene View)";
+                    ? "Face 재선택"
+                    : "Face 선택 시작";
 
                 using (new EditorGUI.DisabledScope(isSelecting))
                 {
@@ -397,12 +398,17 @@ public class ConstraintAssemblyWindow : EditorWindow
         else
         {
             // 선택 세션 진행 중 안내
-            string modeStr = selector.Mode == JointGeometrySelector.SelectionMode.Edge
-                ? "Edge" : "Face";
-            string stepStr = selector.Step == JointGeometrySelector.SelectionStep.WaitA
-                ? "첫 번째 요소" : "두 번째 요소";
+            string modeStr = String.Empty;
+            string stepStr = isObjectA ? "Object A (기준 요소)" : "Object B(이동 요소)";
+            string hint = String.Empty;
+            switch (selector.Mode)
+            {
+                case JointGeometrySelector.SelectionMode.Face:  modeStr = "Face"; break;
+                case JointGeometrySelector.SelectionMode.Edge:  modeStr = "Edge";
+                                                                hint = "(Ctrl: Axis 탐색)"; break;
+            }
             EditorGUILayout.HelpBox(
-                $"{modeStr} 선택 중 — {stepStr}를 Scene View 에서 클릭하세요. (Esc: 취소)",
+                $"{modeStr} 선택 중  —  {stepStr}에서 선택하세요  (Esc: 취소) {hint}",
                 MessageType.Info);
 
             if (GUILayout.Button("선택 취소"))
@@ -780,7 +786,7 @@ public class ConstraintAssemblyWindow : EditorWindow
      * @param   fieldName   직렬화 필드명
      * @param   value       설정할 값
      */
-    private static void SetSerializedField(Component component, string fieldName, Object value)
+    private static void SetSerializedField(Component component, string fieldName, UnityEngine.Object value)
     {
         var so = new SerializedObject(component);
         var prop = so.FindProperty(fieldName);

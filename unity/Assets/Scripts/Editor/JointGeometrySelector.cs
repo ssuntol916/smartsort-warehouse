@@ -54,6 +54,9 @@ public class JointGeometrySelector
 
     private const float EdgeScreenRadius = 12f;  // 엣지 근접 감지 픽셀 반경
 
+    private bool _isAxisMode;  // Ctrl 키를 누르고 있는 동안 true
+    private Line _hoveredAxis; // 축 탐색 모드에서 감지된 회전축
+
     // ============================================================
     // 공개 API
     // ============================================================
@@ -211,6 +214,16 @@ public class JointGeometrySelector
      */
     private void HandleEdgeMode(Event e, Ray ray, Camera camera)
     {
+        // Ctrl 상태를 modifier 로 동기화 (Scene View 미활성화 상태에서도 동작)
+        bool ctrlNow = e.control;
+        if (ctrlNow != _isAxisMode)
+        {
+            _isAxisMode = ctrlNow;
+            if (!_isAxisMode) _hoveredAxis = null;
+            UpdateEdgeHover(ray, e.mousePosition, camera);
+            SceneView.RepaintAll();
+        }
+
         // 마우스 이동: Face 호버 → 경계 Edge 계산 → 근접 Edge 갱신
         if (e.type == EventType.MouseMove)
         {
@@ -218,11 +231,13 @@ public class JointGeometrySelector
             SceneView.RepaintAll();
         }
 
-        // 좌클릭: 호버 Edge가 있으면 확정
-        if (e.type == EventType.MouseDown && e.button == 0 && !e.alt &&
-            _hoveredEdge.HasValue)
+        // 좌클릭: 호버 Edge(또는 축)가 있으면 확정
+        bool canConfirm = _isAxisMode ? _hoveredAxis != null : _hoveredEdge.HasValue;
+        if (e.type == EventType.MouseDown && e.button == 0 && !e.alt && canConfirm)
         {
-            Line line = MeshGeometryPicker.EdgeToLine(_hoveredEdge.Value);
+            Line line = _isAxisMode
+                ? _hoveredAxis
+                : MeshGeometryPicker.EdgeToLine(_hoveredEdge.Value);
 
             if (Step == SelectionStep.WaitA)
             {
@@ -257,19 +272,32 @@ public class JointGeometrySelector
         else
         {
             _currentBoundaryEdges = null;
+            hitFilter = null;
         }
 
         // 경계 Edge 중 마우스에 가장 가까운 Edge 감지
-        if (_currentBoundaryEdges != null &&
-            MeshGeometryPicker.TryGetNearestEdge(
+        if (_currentBoundaryEdges == null ||
+            !MeshGeometryPicker.TryGetNearestEdge(
                 mousePosition, _currentBoundaryEdges, camera,
                 EdgeScreenRadius, out var nearest))
         {
-            _hoveredEdge = nearest;
+            _hoveredEdge = null;
+            _hoveredAxis = null;
+            return;
+        }
+
+        _hoveredEdge = nearest;
+
+        // 회전축 탐색 모드: 시드 Edge로 원통 축 탐지
+        if (_isAxisMode && hitFilter != null)
+        {
+            _hoveredAxis = MeshGeometryPicker.TryGetCylinderAxis(
+                hitFilter.sharedMesh, hitFilter.transform, nearest, out Line axis)
+                ? axis : null;
         }
         else
         {
-            _hoveredEdge = null;
+            _hoveredAxis = null;
         }
     }
     // ============================================================
@@ -279,11 +307,24 @@ public class JointGeometrySelector
     {
         // 안내 레이블 (SceneView 좌상단)
         Handles.BeginGUI();
-        string modeStr = Mode == SelectionMode.Face ? "Face" : "Edge";
-        string stepStr = Step == SelectionStep.WaitA ? "Object A" : "Object B";
+        string modeStr = String.Empty;
+        string stepStr = String.Empty;
+        string hint = String.Empty;
+        switch(Mode)
+        {
+            case SelectionMode.Face:    modeStr = "Face"; break;
+            case SelectionMode.Edge:    modeStr = _isAxisMode ? "Axis" : "Edge";
+                                        hint = "(Ctrl: Axis 탐색)"; break;
+        }
+        switch(Step)
+        {
+            case SelectionStep.WaitA:   stepStr = "Object A (기준 요소)"; break;
+            case SelectionStep.WaitB:   stepStr = "Object B (이동 요소)"; break;
+        }
+
         GUI.Label(
-            new Rect(10, 30, 520, 22),
-            $"[Joint Geometry Selector]  {modeStr} 선택 중  —  {stepStr}를 클릭하세요  (Esc: 취소)",
+            new Rect(10, 30, 620, 22),
+            $"{modeStr} 선택 중  —  {stepStr}를 클릭하세요  (Esc: 취소) {hint}",
             EditorStyles.boldLabel);
         Handles.EndGUI();
 
@@ -326,11 +367,24 @@ public class JointGeometrySelector
                 Handles.DrawLine(edge.Item1, edge.Item2);
         }
 
-        // 호버 Edge 강조 (주황색, 두께 3px)
+        // 시드/호버 Edge 강조 (주황색, 두께 3px)
         if (_hoveredEdge.HasValue)
         {
             Handles.color = new Color(1f, 0.55f, 0f, 1f);
             Handles.DrawLine(_hoveredEdge.Value.Item1, _hoveredEdge.Value.Item2, 3f);
+        }
+
+        // 회전축 표시 (하늘색, 두께 4px, 시드 Edge 길이 기준 연장)
+        if (_isAxisMode && _hoveredAxis != null)
+        {
+            float seedLen = _hoveredEdge.HasValue
+                ? Vector3.Distance(_hoveredEdge.Value.Item1, _hoveredEdge.Value.Item2)
+                : 1f;
+            float ext = Mathf.Max(seedLen * 4f, 0.5f);
+            Vector3 center = _hoveredAxis.PointA;
+            Vector3 dir    = _hoveredAxis.Direction;
+            Handles.color = new Color(0f, 0.85f, 1f, 1f);
+            Handles.DrawLine(center - dir * ext, center + dir * ext, 4f);
         }
     }
 
@@ -365,6 +419,8 @@ public class JointGeometrySelector
         _confirmedFaceMeshFilterA = null;
         _currentBoundaryEdges     = null;
         _hoveredEdge              = null;
+        _isAxisMode               = false;
+        _hoveredAxis              = null;
 
         _onFaceSelectedA = null;
         _onFaceSelectedB = null;

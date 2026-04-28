@@ -42,17 +42,17 @@ public class SliderJointComponentEditor : Editor
         // GUI 설정
         // - 'SliderJoint' 정보
         EditorGUILayout.LabelField("SliderJoint 설정", EditorStyles.boldLabel);
-        EditorGUILayout.PropertyField(_objectA,     new GUIContent("Object A (이동축 기준)"));
-        EditorGUILayout.PropertyField(_objectB,     new GUIContent("Object B (이동 대상)"));
-        EditorGUILayout.PropertyField(_minPosition, new GUIContent("최소 위치 (mm)"));
-        EditorGUILayout.PropertyField(_maxPosition, new GUIContent("최대 위치 (mm)"));
+        EditorGUILayout.PropertyField(_objectA,     new GUIContent("Object A (기준 요소)"));
+        EditorGUILayout.PropertyField(_objectB,     new GUIContent("Object B (이동 요소)"));
+        EditorGUILayout.PropertyField(_minPosition, new GUIContent("최소 위치"));
+        EditorGUILayout.PropertyField(_maxPosition, new GUIContent("최대 위치"));
 
         EditorGUILayout.Space(10);
 
         // - Edge 지정상태 GUI
         EditorGUILayout.LabelField("메쉬 Edge 선택으로 이동축 지정", EditorStyles.boldLabel);
-        DrawLineField("Object A 이동축", _axisLineA);
-        DrawLineField("Object B 이동축", _axisLineB);
+        DrawLineField("Object A - Edge", _axisLineA);
+        DrawLineField("Object B - Edge", _axisLineB);
 
         EditorGUILayout.Space(6);
 
@@ -64,7 +64,7 @@ public class SliderJointComponentEditor : Editor
         using (new EditorGUI.DisabledScope(isSelecting))
         {
             // Button 이 선택되면 'JointGeometrySelector' 호출. Scene View 에서 Edge 를 선택하도록 한다.
-            if (GUILayout.Button("Scene View에서 이동축 Edge 선택  (A → B 순서)"))
+            if (GUILayout.Button("Scene View에서 이동축 Edge 선택"))
             {
                 selector.StartEdgeSelection(
                     line => { _axisLineA = line; Repaint(); },
@@ -75,8 +75,8 @@ public class SliderJointComponentEditor : Editor
         if (isSelectingEdge)
         {
             string msg = selector.Step == JointGeometrySelector.SelectionStep.WaitA
-                ? "Object A  이동축 Edge를 Scene View에서 클릭하세요."
-                : "Object B  이동축 Edge를 Scene View에서 클릭하세요.";
+                ? "Object A - Edge를 Scene View에서 클릭하세요."
+                : "Object B - Edge를 Scene View에서 클릭하세요.";
             EditorGUILayout.HelpBox(msg, MessageType.Info);
 
             if (GUILayout.Button("선택 취소"))
@@ -87,8 +87,8 @@ public class SliderJointComponentEditor : Editor
 
         // - Face 지정상태 GUI
         EditorGUILayout.LabelField("메쉬 면 선택으로 기준 평면 지정", EditorStyles.boldLabel);
-        DrawPlaneField("Object A 기준 평면", _guidePlaneA);
-        DrawPlaneField("Object B 기준 평면", _guidePlaneB);
+        DrawPlaneField("Object A - Face", _guidePlaneA);
+        DrawPlaneField("Object B - Face", _guidePlaneB);
 
         EditorGUILayout.Space(6);
 
@@ -97,7 +97,7 @@ public class SliderJointComponentEditor : Editor
         using (new EditorGUI.DisabledScope(isSelecting))
         {
             // Button 이 선택되면 JointGeometrySelector 호출. Scene View 에서 면 을 선택하도록 한다.
-            if (GUILayout.Button("Scene View에서 기준 면 선택  (A → B 순서)"))
+            if (GUILayout.Button("Scene View에서 Face 선택"))
             {
                 selector.StartFaceSelection(
                     plane => { _guidePlaneA = plane; Repaint(); },
@@ -108,8 +108,8 @@ public class SliderJointComponentEditor : Editor
         if (isSelectingFace)
         {
             string msg = selector.Step == JointGeometrySelector.SelectionStep.WaitA
-                ? "Object A  기준 면을 Scene View에서 클릭하세요."
-                : "Object B  기준 면을 Scene View에서 클릭하세요.";
+                ? "Object A - Face를 Scene View에서 클릭하세요."
+                : "Object B - Faca를 Scene View에서 클릭하세요.";
             EditorGUILayout.HelpBox(msg, MessageType.Info);
 
             if (GUILayout.Button("선택 취소"))

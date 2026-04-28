@@ -19,6 +19,7 @@ public abstract class JointComponent : MonoBehaviour
 
     public Transform ObjectB => _objectB;            // [2026.04.22 추가] 오브젝트 B (이동 또는 회전 대상)
 
+
     protected bool _wasConstrained;                  // 이전 프레임 구속 상태 (구속 상태 변경 로그용)
 
     protected const float ApplyTolerance = 0.001f;   // 물리 적용 판별 허용 오차 (Line/Plane 의 Tolerance 1e-6f 와 구분)
