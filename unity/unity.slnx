@@ -1,8 +1,8 @@
 ﻿<Solution>
   <Project Path="JointToolEditor.csproj" />
   <Project Path="SmartSortScripts.csproj" />
+  <Project Path="Tests.csproj" />
   <Project Path="SmartSortConfig.csproj" />
   <Project Path="EditerTests.csproj" />
   <Project Path="Assembly-CSharp.csproj" />
-  <Project Path="Tests.csproj" />
 </Solution>
